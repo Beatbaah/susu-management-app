@@ -1,4 +1,4 @@
-import { Search, Plus, Users, X, Layers, DollarSign } from 'lucide-react';
+import { Search, Plus, Users, X, Layers, Wallet } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { fmt } from '../utils/helpers';
@@ -11,9 +11,10 @@ const EMPTY_GROUP_DRAFT = {
     contributionAmount: '',
     frequency: 'Weekly',
     totalRounds: '12',
-    color: '#00E5BE',
+    color: '#6491DE',
+    cashoutAmount: '',
 };
-const COLORS = ["#00E5BE", "#FF9F43", "#A29BFE", "#FF6B6B", "#74B9FF", "#FD79A8", "#00CEC9", "#FFD166"];
+const COLORS = ["#6491DE", "#073D7F", "#3B5FBF", "#8B5CF6", "#F59E0B", "#10B981", "#EC4899", "#0EA5E9"];
 export function Groups() {
     const { authUser, groups, createGroup, updateGroup, appReady } = useAppContext();
     const [search, setSearch] = useState('');
@@ -37,7 +38,8 @@ export function Groups() {
             contributionAmount: String(g.contributionAmount || g.contribution || ''),
             frequency: String(g.frequency || 'Weekly'),
             totalRounds: String(g.totalRounds || g.totalSlots || '12'),
-            color: String(g.color || '#00E5BE'),
+            color: String(g.color || '#6491DE'),
+            cashoutAmount: String(g.cashoutAmount || (g.contributionAmount || g.contribution || 0) * (g.totalRounds || g.totalSlots || 1)),
         });
         setEditingId(g.id);
         setDialogOpen(true);
@@ -63,6 +65,7 @@ export function Groups() {
             totalRounds: Number(draft.totalRounds),
             totalSlots: Number(draft.totalRounds),
             color: draft.color,
+            cashoutAmount: draft.cashoutAmount ? Number(draft.cashoutAmount) : Number(draft.contributionAmount) * Number(draft.totalRounds),
             members: [],
             chat: [],
             currentRound: 1,
@@ -112,54 +115,54 @@ export function Groups() {
     });
     const totalMembers = groupsWithDetails.reduce((sum, g) => sum + g.memberCount, 0);
     const totalPool = groupsWithDetails.reduce((sum, g) => sum + g.poolSize, 0);
-    return (<div className="pb-32 page-enter">
-      <div className="px-6 md:px-10 pt-10 pb-8">
-        <div className="flex items-start justify-between mb-10">
+    return (<div className="pb-28 page-enter">
+      <div className="px-4 sm:px-6 pt-5 sm:pt-6 pb-4">
+        <div className="flex items-center justify-between mb-4 sm:mb-6">
           <div>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-xl bg-primary/20 flex items-center justify-center">
-                <Layers className="w-4 h-4 text-primary"/>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-primary/20 flex items-center justify-center">
+                <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary"/>
               </div>
-              <p className="eyebrow text-muted-foreground/50">Group Management</p>
+              <p className="eyebrow text-muted-foreground">Group Management</p>
             </div>
-            <h1 className="text-4xl font-bold text-foreground tracking-tight leading-none mb-2">Susu Groups</h1>
-            <p className="text-muted-foreground text-sm font-medium">Manage all active rotating savings circles.</p>
+            <h1 className="text-2xl font-bold text-foreground mb-1">Susu Groups</h1>
+            <p className="text-muted-foreground text-sm">Manage all active rotating savings circles.</p>
           </div>
-          {canAdd && (<button type="button" onClick={openCreateDialog} className="w-14 h-14 rounded-[1.25rem] bg-primary text-primary-foreground shadow-xl shadow-primary/30 flex items-center justify-center hover:scale-105 active:scale-95 transition-all group flex-shrink-0" aria-label="Create a group">
-              <Plus className="w-8 h-8 group-hover:rotate-90 transition-transform duration-300"/>
+          {canAdd && (<button type="button" onClick={openCreateDialog} className="p-2.5 sm:p-3 bg-primary text-primary-foreground rounded-2xl flex items-center justify-center active:scale-95 transition-all flex-shrink-0" aria-label="Create a group">
+              <Plus className="w-5 h-5 sm:w-6 sm:h-6"/>
             </button>)}
         </div>
 
-        <div className="grid grid-cols-3 gap-5 mb-8">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6">
           {[{ label: 'Active Groups', value: groups.length, icon: Layers, color: 'text-primary', bg: 'bg-primary/15' },
             { label: 'Total Members', value: totalMembers, icon: Users, color: 'text-success', bg: 'bg-success/15' },
-            { label: 'Combined Pool', value: fmt(totalPool), icon: DollarSign, color: 'text-warning', bg: 'bg-warning/15' }]
-            .map(({ label, value, icon: Icon, color, bg }) => (<div key={label} className="glass-card p-5 rounded-[2rem] border border-border relative overflow-hidden group">
-                <div className={`w-10 h-10 ${bg} rounded-xl flex items-center justify-center mb-3`}>
-                  <Icon className={`w-5 h-5 ${color}`}/>
+            { label: 'Combined Pool', value: fmt(totalPool), icon: Wallet, color: 'text-warning', bg: 'bg-warning/15' }]
+            .map(({ label, value, icon: Icon, color, bg }) => (<div key={label} className="bg-card rounded-xl sm:rounded-2xl p-2.5 sm:p-4 border border-border overflow-hidden">
+                <div className={`w-7 h-7 sm:w-9 sm:h-9 ${bg} rounded-lg sm:rounded-xl flex items-center justify-center mb-2`}>
+                  <Icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${color}`}/>
                 </div>
-                <p className="text-xs text-muted-foreground/40 uppercase font-bold tracking-widest mb-1">{label}</p>
-                <p className={`text-xl font-bold tracking-tight ${color}`}>{value}</p>
+                <p className="app-caption text-muted-foreground uppercase mb-0.5">{label}</p>
+                <p className={`app-value truncate ${color}`}>{value}</p>
               </div>))}
         </div>
 
-        <div className="relative mb-4">
-          <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground/30"/>
-          <input type="text" placeholder="Search groups…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-14 pr-5 py-4 bg-input-background rounded-2xl border border-border focus:bg-card focus:border-primary/20 focus:ring-4 focus:ring-primary/5 text-sm font-bold text-foreground placeholder:text-muted-foreground/30 outline-none transition-all"/>
+        <div className="relative mb-4 sm:mb-5">
+          <Search className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground"/>
+          <input type="text" placeholder="Search groups…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-11 sm:pl-14 pr-4 sm:pr-5 py-2.5 sm:py-3 bg-input-background rounded-2xl border border-border focus:outline-none focus:ring-2 focus:ring-primary text-sm text-foreground transition-all"/>
         </div>
       </div>
 
-      <div className="px-6 md:px-10 space-y-5">
+      <div className="px-4 sm:px-6 space-y-3">
         {!appReady && filtered.length === 0 ? (<SkeletonList count={3}/>) : filtered.length === 0 ? (<div className="glass-card rounded-[2.5rem] border border-dashed border-border p-16 text-center">
             <div className="w-20 h-20 rounded-3xl bg-primary/10 flex items-center justify-center mx-auto mb-6 text-primary/40">
               <Layers className="w-10 h-10"/>
             </div>
             <h3 className="text-xl font-bold text-foreground">{groups.length === 0 ? 'No Groups Yet' : 'No Matches'}</h3>
-            <p className="text-muted-foreground/40 text-sm mt-2 mb-6">{groups.length === 0 ? 'Create your first susu group to start collecting contributions.' : 'Try a different search term.'}</p>
+            <p className="text-muted-foreground text-sm mt-2 mb-6">{groups.length === 0 ? 'Create your first susu group to start collecting contributions.' : 'Try a different search term.'}</p>
             {canAdd && groups.length === 0 && (<button type="button" onClick={openCreateDialog} className="px-6 py-3 bg-primary text-primary-foreground rounded-2xl text-sm font-bold uppercase tracking-wider">
                 Create First Group
               </button>)}
-          </div>) : (filtered.map((group) => (<GroupCard key={group.id} groupName={group.groupName || group.name} memberCount={group.memberCount} currentRound={group.currentRound || 0} totalSlots={group.totalSlots} contributionAmount={group.contributionAmount} frequency={group.frequency || 'Weekly'} poolSize={group.poolSize} nextPayoutLabel={group.nextPayoutLabel} color={group.color} onEdit={canEdit ? () => openEditDialog(group) : undefined}/>)))}
+          </div>) : (filtered.map((group) => (<GroupCard key={group.id} groupName={group.groupName || group.name} memberCount={group.memberCount} currentRound={group.currentRound || 0} totalSlots={group.totalSlots} totalRounds={group.totalRounds || group.totalSlots} contributionAmount={group.contributionAmount} frequency={group.frequency || 'Weekly'} poolSize={group.poolSize} nextPayoutLabel={group.nextPayoutLabel} color={group.color} cashoutAmount={group.cashoutAmount || (group.contributionAmount * (group.totalRounds || group.totalSlots || 1))} onEdit={canEdit ? () => openEditDialog(group) : undefined}/>)))}
       </div>
 
       {dialogOpen && (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/20 backdrop-blur-sm backdrop-blur-md page-enter">
@@ -167,9 +170,9 @@ export function Groups() {
             <div className="flex items-center justify-between mb-8 relative z-10">
               <div>
                 <h3 className="text-2xl font-bold text-foreground tracking-tight">{editingId != null ? 'Edit Group' : 'New Group'}</h3>
-                <p className="text-muted-foreground/50 text-xs font-bold uppercase tracking-widest mt-1">Susu Circle Configuration</p>
+                <p className="text-muted-foreground text-xs font-bold uppercase tracking-widest mt-1">Susu Circle Configuration</p>
               </div>
-              <button type="button" onClick={closeDialog} className="w-10 h-10 rounded-xl bg-border flex items-center justify-center text-foreground/40 hover:bg-accent hover:text-foreground transition-all">
+              <button type="button" onClick={closeDialog} className="w-10 h-10 rounded-xl bg-border flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-all">
                 <X className="w-5 h-5"/>
               </button>
             </div>
@@ -177,7 +180,7 @@ export function Groups() {
             <div className="space-y-5 relative z-10">
               <div>
                 <label className="text-xs font-bold uppercase tracking-widest text-primary mb-2.5 block">Group Name</label>
-                <input type="text" placeholder="e.g. Market Women Circle" value={draft.groupName} onChange={(e) => setDraft(prev => ({ ...prev, groupName: e.target.value }))} className="w-full bg-input-background border border-border rounded-2xl px-4 py-4 text-sm font-bold text-foreground placeholder:text-foreground/20 focus:bg-card focus:border-primary/40 focus:ring-4 focus:ring-primary/5 outline-none transition-all"/>
+                <input type="text" placeholder="e.g. Market Women Circle" value={draft.groupName} onChange={(e) => setDraft(prev => ({ ...prev, groupName: e.target.value }))} className="w-full bg-input-background border border-border rounded-2xl px-4 py-4 text-sm font-bold text-foreground placeholder:text-muted-foreground focus:bg-card focus:border-primary/40 focus:ring-4 focus:ring-primary/5 outline-none transition-all"/>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -195,6 +198,10 @@ export function Groups() {
                 <label className="text-xs font-bold uppercase tracking-widest text-primary mb-2.5 block">Total Rounds</label>
                 <input type="number" min={1} value={draft.totalRounds} onChange={(e) => setDraft(prev => ({ ...prev, totalRounds: e.target.value }))} className="w-full bg-input-background border border-border rounded-2xl px-4 py-4 text-sm font-bold text-foreground outline-none focus:border-primary/40 transition-all"/>
               </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-widest text-primary mb-2.5 block">Cashout per Member (GH₵)</label>
+                <input type="number" min={0} value={draft.cashoutAmount} onChange={(e) => setDraft(prev => ({ ...prev, cashoutAmount: e.target.value }))} className="w-full bg-input-background border border-border rounded-2xl px-4 py-4 text-sm font-bold text-foreground outline-none focus:border-primary/40 transition-all" placeholder={`Auto: GH₵${(Number(draft.contributionAmount||0) * Number(draft.totalRounds||0)) || ''}`}/>
+              </div>
               <div className="pt-2">
                 <label className="text-xs font-bold uppercase tracking-widest text-primary mb-3 block">Accent Colour</label>
                 <div className="flex gap-2 flex-wrap">
@@ -207,7 +214,7 @@ export function Groups() {
             </div>
 
             <div className="flex gap-3 mt-10 relative z-10">
-              <button type="button" onClick={closeDialog} className="flex-1 bg-accent border border-border py-4 rounded-2xl text-xs font-bold uppercase tracking-wide text-foreground/40 hover:bg-accent hover:text-foreground transition-all">
+              <button type="button" onClick={closeDialog} className="flex-1 bg-accent border border-border py-4 rounded-2xl text-xs font-bold uppercase tracking-wide text-muted-foreground hover:bg-accent hover:text-foreground transition-all">
                 Cancel
               </button>
               <button type="button" onClick={handleSave} className="flex-[1.5] bg-primary text-primary-foreground shadow-xl shadow-primary/30 py-4 rounded-2xl text-xs font-bold uppercase tracking-wide hover:scale-[1.02] active:scale-95 transition-all">

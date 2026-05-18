@@ -1,7 +1,7 @@
 import { readStore, writeStore } from './storage';
 import { MOCK_REMINDERS } from '../data/mockData';
 import { genId } from '../utils/helpers';
-import { replaceCollection, upsertDoc } from './firestoreSync';
+import { replaceCollection, upsertDoc, removeDoc } from './firestoreSync';
 // Notifications == reminders in the current data model.
 const STORE_KEY = 'reminders';
 const FIRESTORE_COLLECTION = 'notifications';
@@ -39,4 +39,14 @@ export function markRead(reminderId) {
 export function markAllRead() {
     const updated = listReminders().map(r => ({ ...r, read: true }));
     replaceReminders(updated);
+}
+export function deleteReminder(reminderId) {
+    const updated = listReminders().filter(r => r.id !== reminderId);
+    replaceReminders(updated);
+    void removeDoc(FIRESTORE_COLLECTION, reminderId);
+}
+export function clearReminders() {
+    const current = listReminders();
+    replaceReminders([]);
+    current.forEach(r => void removeDoc(FIRESTORE_COLLECTION, r.id));
 }

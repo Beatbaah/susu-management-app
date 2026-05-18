@@ -1,4 +1,4 @@
-import { Bell, Clock, CheckCircle, AlertCircle, Plus, X, Send, ShieldAlert, Sparkles, MessageSquare } from 'lucide-react';
+import { Bell, Clock, CheckCircle, AlertCircle, Plus, X, Send, ShieldAlert, Sparkles, MessageSquare, Phone, MessageCircle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { toast } from '../utils/toast';
@@ -9,7 +9,14 @@ const EMPTY_DRAFT = {
     title: 'Payment Reminder',
     text: 'A friendly reminder about your upcoming susu contribution.',
     type: 'info',
+    channels: ['in-app'],
 };
+const CHANNEL_OPTIONS = [
+    { key: 'in-app', label: 'In-App', icon: Bell, color: 'text-primary' },
+    { key: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, color: 'text-success' },
+    { key: 'sms', label: 'SMS', icon: MessageSquare, color: 'text-warning' },
+    { key: 'call', label: 'Call', icon: Phone, color: 'text-destructive' },
+];
 export function Reminders() {
     const { authUser, users, payments, reminders, sendReminder, markReminderRead, markAllRemindersRead } = useAppContext();
     const [filter, setFilter] = useState('all');
@@ -54,7 +61,21 @@ export function Reminders() {
             setDialogError('Title and message are required.');
             return;
         }
-        sendReminder({ userIds: recipients, title: draft.title.trim(), text: draft.text.trim(), type: draft.type });
+        sendReminder({ userIds: recipients, title: draft.title.trim(), text: draft.text.trim(), type: draft.type, channels: draft.channels });
+        // For external channels (WhatsApp/SMS/Call), open links for single recipient
+        if (draft.audience === 'single' && recipients.length === 1) {
+            const recipient = users.find(u => u.id === recipients[0]);
+            const phone = (recipient?.phone || '').replace(/[\s\-()]/g, '');
+            const msg = encodeURIComponent(`[Excellent Susu] ${draft.title.trim()}: ${draft.text.trim()}`);
+            if (phone) {
+                if (draft.channels.includes('whatsapp'))
+                    window.open(`https://wa.me/${phone.replace(/^0/, '233')}?text=${msg}`, '_blank');
+                if (draft.channels.includes('sms'))
+                    window.open(`sms:${phone}?body=${msg}`, '_blank');
+                if (draft.channels.includes('call'))
+                    window.open(`tel:${phone}`, '_blank');
+            }
+        }
         toast.success(`Reminder broadcasted to ${recipients.length} member${recipients.length === 1 ? '' : 's'}`);
         setDialogOpen(false);
         setDraft(EMPTY_DRAFT);
@@ -63,66 +84,52 @@ export function Reminders() {
         const u = users.find(user => user.id === id);
         return u?.fullName || u?.name || 'Unknown User';
     };
-    return (<div className="pb-32 page-enter">
+    return (<div className="pb-28 page-enter">
       {/* Header Section */}
       <div className="px-4 sm:px-6 md:px-10 pt-4 sm:pt-6 pb-4 sm:pb-6">
-        <div className="flex items-start justify-between gap-3 mb-4 sm:mb-6">
+        <div className="flex items-center justify-between gap-3 mb-4">
           <div className="min-w-0">
-            <h1 className="page-title text-foreground mb-1">Communications</h1>
-            <p className="body text-muted-foreground/70 max-w-xl">Manage alerts, notifications, and group broadcasts.</p>
+            <h1 className="app-title text-foreground">Alerts</h1>
+            <p className="app-caption text-muted-foreground mt-1">{visible.length} shown from {counts.total} total</p>
           </div>
-          {canSend && (<button type="button" onClick={() => { setDraft(EMPTY_DRAFT); setDialogError(null); setDialogOpen(true); }} className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 flex items-center justify-center active:scale-95 transition-all group flex-shrink-0" aria-label="New Broadcast">
-              <Plus className="w-5 h-5 sm:w-6 sm:h-6 group-hover:rotate-90 transition-transform duration-300"/>
+          {canSend && (<button type="button" onClick={() => { setDraft(EMPTY_DRAFT); setDialogError(null); setDialogOpen(true); }} className="h-10 px-3.5 rounded-xl bg-primary text-primary-foreground flex items-center gap-2 active:scale-95 transition-all flex-shrink-0" aria-label="New Broadcast">
+              <Plus className="w-4 h-4"/>
+              <span className="hidden sm:inline app-control">New broadcast</span>
             </button>)}
         </div>
 
         {/* High-level metrics */}
-        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6">
-          <div className="glass-card p-3 sm:p-4 rounded-xl border border-border relative overflow-hidden group">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 relative z-10">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-primary/15 flex items-center justify-center text-primary">
-                <Bell className="w-4 h-4 sm:w-5 sm:h-5"/>
-              </div>
-              <div className="min-w-0">
-                <p className="eyebrow text-muted-foreground/50 truncate">Global</p>
-                <p className="text-lg sm:text-xl font-semibold text-foreground leading-none">{counts.total}</p>
-              </div>
+        <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-border bg-card/70 mb-4">
+          <div className="min-w-0 px-2.5 py-2 border-r border-border">
+            <div className="relative z-10">
+              <p className="app-value text-foreground">{counts.total}</p>
+              <p className="app-caption text-muted-foreground mt-1.5 truncate">All</p>
             </div>
           </div>
-          <div className="glass-card p-3 sm:p-4 rounded-xl border border-border relative overflow-hidden group">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 relative z-10">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-warning/15 flex items-center justify-center text-warning">
-                <Clock className="w-4 h-4 sm:w-5 sm:h-5"/>
-              </div>
-              <div className="min-w-0">
-                <p className="eyebrow text-muted-foreground/50 truncate">Unseen</p>
-                <p className="text-lg sm:text-xl font-semibold text-foreground leading-none">{counts.unread}</p>
-              </div>
+          <div className="min-w-0 px-2.5 py-2 border-r border-border">
+            <div className="relative z-10">
+              <p className="app-value text-warning">{counts.unread}</p>
+              <p className="app-caption text-muted-foreground mt-1.5 truncate">Unread</p>
             </div>
           </div>
-          <div className="glass-card p-3 sm:p-4 rounded-xl border border-border relative overflow-hidden group">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 relative z-10">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-destructive/15 flex items-center justify-center text-destructive">
-                <ShieldAlert className="w-4 h-4 sm:w-5 sm:h-5"/>
-              </div>
-              <div className="min-w-0">
-                <p className="eyebrow text-muted-foreground/50 truncate">Warnings</p>
-                <p className="text-lg sm:text-xl font-semibold text-foreground leading-none">{counts.warning}</p>
-              </div>
+          <div className="min-w-0 px-2.5 py-2">
+            <div className="relative z-10">
+              <p className="app-value text-destructive">{counts.warning}</p>
+              <p className="app-caption text-muted-foreground mt-1.5 truncate">Warning</p>
             </div>
           </div>
         </div>
 
         {/* Filter Controls */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="grid grid-cols-3 sm:flex sm:items-center gap-2">
-            {['all', 'unread', 'warning'].map(f => (<button key={f} type="button" onClick={() => setFilter(f)} className={cn("h-10 px-3 rounded-lg eyebrow transition-all", filter === f
-                ? "bg-primary text-primary-foreground shadow-md shadow-primary/15"
-                : "bg-accent border border-border text-muted-foreground/70 hover:text-foreground")}>
+          <div className="grid grid-cols-3 rounded-xl border border-border bg-card/70 p-1">
+            {['all', 'unread', 'warning'].map(f => (<button key={f} type="button" onClick={() => setFilter(f)} className={cn("h-8 px-3 rounded-lg app-tab transition-colors", filter === f
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/50")}>
                 {f === 'all' ? 'All' : f === 'unread' ? 'Unread' : 'Warning'}
               </button>))}
           </div>
-          {counts.unread > 0 && (<button type="button" onClick={() => { markAllRemindersRead(); toast.success('Cleared all notifications'); }} className="h-9 px-3 rounded-lg text-xs font-medium text-primary/80 bg-primary/8 hover:text-primary transition-colors w-full sm:w-auto">
+          {counts.unread > 0 && (<button type="button" onClick={() => { markAllRemindersRead(); toast.success('Cleared all notifications'); }} className="h-8 px-3 rounded-lg app-control text-primary/80 bg-primary/8 hover:text-primary transition-colors w-full sm:w-auto">
               Mark all read
             </button>)}
         </div>
@@ -131,11 +138,11 @@ export function Reminders() {
       {/* Feed Section */}
       <div className="px-4 sm:px-6 md:px-10 space-y-3 sm:space-y-4 max-w-4xl">
         {visible.length === 0 ? (<div className="py-12 sm:py-16 text-center glass-card rounded-xl border border-dashed border-border px-4">
-            <div className="w-14 h-14 rounded-xl bg-accent flex items-center justify-center mx-auto mb-4 text-foreground/30">
+            <div className="w-14 h-14 rounded-xl bg-accent flex items-center justify-center mx-auto mb-4 text-muted-foreground">
               <Sparkles className="w-7 h-7"/>
             </div>
             <h3 className="section-title text-foreground">Inbox Clear</h3>
-            <p className="body text-muted-foreground/60 mt-1">No alerts found matching your current filter.</p>
+            <p className="body text-muted-foreground mt-1">No alerts found matching your current filter.</p>
           </div>) : (visible.map(r => (<button key={r.id} type="button" onClick={() => markReminderRead(r.id)} className={cn("w-full text-left glass-card p-4 sm:p-5 rounded-xl border transition-all duration-200 group overflow-hidden", r.read ? "border-border opacity-80" : "border-primary/20 bg-primary/[0.03] glow-primary")}>
               <div className="flex items-start gap-3 sm:gap-4 relative z-10">
                 <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 shadow-inner", r.type === 'warning' ? "bg-destructive/15 text-destructive" :
@@ -147,15 +154,37 @@ export function Reminders() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-3 mb-1">
-                    <h4 className="text-sm sm:text-base font-semibold text-foreground truncate group-hover:text-primary transition-colors">{r.title}</h4>
+                    <h4 className="app-row-title text-foreground truncate group-hover:text-primary transition-colors">{r.title}</h4>
                     {!r.read && <div className="w-2 h-2 rounded-full bg-primary pulse-dot"/>}
                   </div>
-                  <p className="text-[13px] sm:text-sm font-normal text-muted-foreground/80 leading-relaxed mb-3">{r.text || r.message}</p>
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-t border-border pt-3">
-                    <p className="eyebrow text-muted-foreground/45">
-                      Recipient: <span className="text-foreground/55">{userName(r.userId)}</span>
-                    </p>
-                    <p className="eyebrow text-muted-foreground/45">
+                  <p className="app-row-meta text-muted-foreground mb-3">{r.text || r.message}</p>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-t border-border pt-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="eyebrow text-muted-foreground">
+                        {userName(r.userId)}
+                      </p>
+                      {Array.isArray(r.channels) && r.channels.filter(c => c !== 'in-app').map(ch => {
+                        const opt = CHANNEL_OPTIONS.find(o => o.key === ch);
+                        if (!opt) return null;
+                        const Icon = opt.icon;
+                        const recipientUser = users.find(u => u.id === r.userId);
+                        const phone = (recipientUser?.phone || '').replace(/[\s\-()]/g, '');
+                        const msg = encodeURIComponent(`[Excellent Susu] ${r.title}: ${r.text || r.message || ''}`);
+                        const href = ch === 'whatsapp' ? `https://wa.me/${phone.replace(/^0/, '233')}?text=${msg}`
+                            : ch === 'sms' ? `sms:${phone}?body=${msg}`
+                            : ch === 'call' ? `tel:${phone}` : null;
+                        if (!href) return null;
+                        return (
+                          <a key={ch} href={href} target={ch === 'whatsapp' ? '_blank' : undefined} rel="noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md border app-badge uppercase transition-colors hover:opacity-80', opt.color, 'bg-current/5 border-current/20')}>
+                            <Icon className="w-3 h-3"/>
+                            {opt.label}
+                          </a>
+                        );
+                      })}
+                    </div>
+                    <p className="eyebrow text-muted-foreground shrink-0">
                       {r.date || r.sent || 'Just now'}
                     </p>
                   </div>
@@ -171,9 +200,9 @@ export function Reminders() {
             <div className="flex items-center justify-between mb-8 relative z-10">
               <div>
                 <h3 className="text-2xl font-bold text-foreground tracking-tight">New Broadcast</h3>
-                <p className="text-muted-foreground/50 text-xs font-bold uppercase tracking-widest mt-1">Global Communication Tool</p>
+                <p className="text-muted-foreground text-xs font-bold uppercase tracking-widest mt-1">Global Communication Tool</p>
               </div>
-              <button type="button" onClick={() => setDialogOpen(false)} className="w-10 h-10 rounded-xl bg-border flex items-center justify-center text-foreground/40 hover:bg-accent hover:text-foreground transition-all">
+              <button type="button" onClick={() => setDialogOpen(false)} className="w-10 h-10 rounded-xl bg-border flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-all">
                 <X className="w-5 h-5"/>
               </button>
             </div>
@@ -194,7 +223,7 @@ export function Reminders() {
                   <div className="grid grid-cols-3 gap-2">
                     {['info', 'warning', 'success'].map(t => (<button key={t} type="button" onClick={() => setDraft(d => ({ ...d, type: t }))} className={cn("py-3 rounded-2xl text-xs font-bold uppercase tracking-widest border transition-all", draft.type === t
                     ? "border-primary/50 bg-primary/20 text-foreground shadow-lg shadow-primary/10"
-                    : "border-border bg-border text-foreground/30 hover:bg-accent")}>
+                    : "border-border bg-border text-muted-foreground hover:bg-accent")}>
                         {t}
                       </button>))}
                   </div>
@@ -208,6 +237,29 @@ export function Reminders() {
                     {users.filter(u => u.role === 'member').map(u => (<option key={u.id} value={u.id}>{u.fullName || u.name}</option>))}
                   </select>
                 </div>)}
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-widest text-primary mb-2.5 block">Delivery Channel</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {CHANNEL_OPTIONS.map(ch => {
+                    const Icon = ch.icon;
+                    const active = draft.channels.includes(ch.key);
+                    return (
+                      <button key={ch.key} type="button"
+                        onClick={() => setDraft(d => ({
+                          ...d,
+                          channels: active
+                            ? d.channels.filter(c => c !== ch.key).length > 0 ? d.channels.filter(c => c !== ch.key) : d.channels
+                            : [...d.channels, ch.key]
+                        }))}
+                        className={cn('flex flex-col items-center gap-1.5 p-2.5 rounded-2xl border transition-all', active ? 'border-primary bg-primary/10 text-foreground' : 'border-border bg-input-background text-muted-foreground hover:border-primary/30')}>
+                        <Icon className={cn('w-4 h-4', active ? ch.color : '')}/>
+                        <span className="app-badge uppercase">{ch.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
               <div className="space-y-4">
                 <div>
@@ -227,7 +279,7 @@ export function Reminders() {
             </div>
 
             <div className="flex gap-3 mt-10 relative z-10">
-              <button type="button" onClick={() => setDialogOpen(false)} className="flex-1 bg-accent border border-border py-4 rounded-2xl text-xs font-bold uppercase tracking-wide text-foreground/40 hover:bg-accent hover:text-foreground transition-all">
+              <button type="button" onClick={() => setDialogOpen(false)} className="flex-1 bg-accent border border-border py-4 rounded-2xl text-xs font-bold uppercase tracking-wide text-muted-foreground hover:bg-accent hover:text-foreground transition-all">
                 Dismiss
               </button>
               <button type="button" onClick={handleSend} className="flex-[1.5] bg-primary text-primary-foreground shadow-xl shadow-primary/30 py-4 rounded-2xl text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all group">

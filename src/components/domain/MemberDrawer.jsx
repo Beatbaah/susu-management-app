@@ -38,9 +38,9 @@ export function MemberDrawer({ user, onClose, onEdit }) {
     const paidCount = myPayments.filter(p => p.status === 'paid').length;
     return (<>
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-0 sm:p-4" onClick={onClose}>
-        <div className="bg-card border border-border w-full sm:max-w-md max-h-[95vh] sm:rounded-3xl rounded-t-3xl shadow-[0_-20px_60px_rgba(0,0,0,0.6)] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-          {/* Floating action buttons — sit over the hero banner */}
-          <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
+        <div className="relative bg-card border border-border w-full sm:max-w-md max-h-[95vh] sm:rounded-3xl rounded-t-3xl shadow-[0_-20px_60px_rgba(0,0,0,0.6)] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+          {/* Floating action buttons — positioned relative to the modal card */}
+          <div className="absolute top-3 right-3 z-20 flex items-center gap-2">
             {onEdit && canManage && (<button type="button" onClick={onEdit} aria-label="Edit member" className="w-9 h-9 rounded-full bg-black/30 hover:bg-black/50 text-foreground flex items-center justify-center backdrop-blur-md transition-colors">
                 <Pencil className="w-4 h-4"/>
               </button>)}

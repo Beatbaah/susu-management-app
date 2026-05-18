@@ -68,7 +68,7 @@ export function AuditLogs() {
     return (<div className="pb-28">
       <div className="px-4 sm:px-6 pt-4 sm:pt-6 pb-4">
         <div className="flex items-center justify-between mb-4 sm:mb-6">
-          <h1 className="text-xl sm:text-2xl font-semibold">Audit Logs</h1>
+          <h1 className="app-title">Audit Logs</h1>
           {auditLogs.length > 0 && (<button type="button" onClick={async () => {
                 const ok = await confirmToast({
                     title: 'Clear all audit logs?',
@@ -80,39 +80,39 @@ export function AuditLogs() {
                     return;
                 clearAuditLogs();
                 toast.success('Audit logs cleared');
-            }} className="text-xs text-destructive hover:underline">
+            }} className="app-control text-destructive hover:underline">
               Clear All
             </button>)}
         </div>
 
-        <div className="relative mb-6">
-          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground"/>
-          <input type="text" placeholder="Search audit logs..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-card rounded-2xl border border-border focus:outline-none focus:ring-2 focus:ring-primary text-foreground"/>
+        <div className="relative mb-4">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground"/>
+          <input type="text" placeholder="Search audit logs..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full h-11 pl-9 pr-4 bg-card rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/40 text-sm text-foreground placeholder:text-muted-foreground/55 transition-all"/>
         </div>
 
-        <div className="grid grid-cols-4 gap-2 mb-6">
-          <div className="bg-card rounded-2xl p-3 border border-border text-center">
-            <p className="text-muted-foreground text-xs mb-1">Total</p>
-            <p className="text-xl">{counts.total}</p>
+        <div className="grid grid-cols-4 overflow-hidden rounded-xl border border-border bg-card/70 mb-4">
+          <div className="min-w-0 px-2.5 py-2 border-r border-border">
+            <p className="app-value">{counts.total}</p>
+            <p className="app-caption text-muted-foreground mt-1.5 truncate">Total</p>
           </div>
-          <div className="bg-card rounded-2xl p-3 border border-border text-center">
-            <p className="text-muted-foreground text-xs mb-1">Critical</p>
-            <p className="text-xl text-destructive">{counts.critical}</p>
+          <div className="min-w-0 px-2.5 py-2 border-r border-border">
+            <p className="app-value text-destructive">{counts.critical}</p>
+            <p className="app-caption text-muted-foreground mt-1.5 truncate">Critical</p>
           </div>
-          <div className="bg-card rounded-2xl p-3 border border-border text-center">
-            <p className="text-muted-foreground text-xs mb-1">Warning</p>
-            <p className="text-xl text-primary">{counts.warning}</p>
+          <div className="min-w-0 px-2.5 py-2 border-r border-border">
+            <p className="app-value text-primary">{counts.warning}</p>
+            <p className="app-caption text-muted-foreground mt-1.5 truncate">Warning</p>
           </div>
-          <div className="bg-card rounded-2xl p-3 border border-border text-center">
-            <p className="text-muted-foreground text-xs mb-1">Info</p>
-            <p className="text-xl text-success">{counts.info}</p>
+          <div className="min-w-0 px-2.5 py-2">
+            <p className="app-value text-success">{counts.info}</p>
+            <p className="app-caption text-muted-foreground mt-1.5 truncate">Info</p>
           </div>
         </div>
 
-        <div className="flex gap-2 mb-6 overflow-x-auto">
-          {['all', 'critical', 'warning', 'info'].map(level => (<button key={level} onClick={() => setFilterSeverity(level)} className={`px-4 py-2 rounded-xl whitespace-nowrap transition-colors ${filterSeverity === level
+        <div className="flex rounded-xl border border-border bg-card/70 p-1 mb-4 overflow-x-auto no-scrollbar">
+          {['all', 'critical', 'warning', 'info'].map(level => (<button key={level} onClick={() => setFilterSeverity(level)} className={`min-w-0 flex-1 px-2.5 py-1.5 rounded-lg whitespace-nowrap app-tab transition-colors flex-shrink-0 ${filterSeverity === level
                 ? 'bg-primary text-primary-foreground'
-                : 'bg-card text-muted-foreground border border-border'}`}>
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}>
               {level.charAt(0).toUpperCase() + level.slice(1)}
             </button>))}
         </div>

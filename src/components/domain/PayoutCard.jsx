@@ -1,4 +1,4 @@
-import { Calendar, CheckCircle, Clock, User, DollarSign, ChevronRight, Trophy } from 'lucide-react';
+import { Calendar, CheckCircle, Clock, User, ChevronRight, Trophy } from 'lucide-react';
 import { fmt } from '../../utils/helpers';
 export function PayoutCard({ memberName, groupName, payoutAmount, scheduledDate, paidAt, status, round, totalRounds, footer, }) {
     const isCompleted = status === 'completed' || status === 'paid';
@@ -34,7 +34,7 @@ export function PayoutCard({ memberName, groupName, payoutAmount, scheduledDate,
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div>
           <p className="text-muted-foreground text-xs mb-1 flex items-center gap-1">
-            <DollarSign className="w-3 h-3"/>
+            <span className="app-badge">₵</span>
             Payout Amount
           </p>
           <p className="text-foreground text-lg">{fmt(payoutAmount)}</p>

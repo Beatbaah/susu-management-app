@@ -98,7 +98,7 @@ export function Profile({ user, onNavigate, onLogout }) {
             items: [
                 { icon: Receipt, label: 'My Receipts', action: 'receipts' },
                 { icon: Award, label: 'Leaderboard', action: 'leaderboard' },
-                { icon: FileText, label: 'Audit Logs', action: 'audit' },
+                ...(currentUser.role === 'admin' ? [{ icon: FileText, label: 'Audit Logs', action: 'audit' }] : []),
             ]
         },
         {
@@ -111,15 +111,18 @@ export function Profile({ user, onNavigate, onLogout }) {
         }
     ];
     const getRoleBadgeColor = (role) => {
-        switch (role.toLowerCase()) {
+        switch ((role || '').toLowerCase()) {
+            case 'admin':
             case 'super admin':
-                return 'bg-destructive/20 text-destructive';
+                return 'bg-destructive/15 text-destructive border border-destructive/30';
             case 'manager':
-                return 'bg-primary/20 text-primary';
+                return 'bg-primary/15 text-primary border border-primary/30';
             case 'collector':
-                return 'bg-success/20 text-success';
+                return 'bg-purple-500/15 text-purple-600 border border-purple-500/30';
+            case 'member':
+                return 'bg-success/15 text-success border border-success/30';
             default:
-                return 'bg-muted text-muted-foreground';
+                return 'bg-muted text-muted-foreground border border-border';
         }
     };
     const routeByAction = {
@@ -141,9 +144,9 @@ export function Profile({ user, onNavigate, onLogout }) {
         if (nextPage)
             onNavigate?.(nextPage);
     };
-    return (<div className="pb-28">
-      <div className="px-4 sm:px-6 pt-4 sm:pt-6 pb-6">
-        <h1 className="text-xl sm:text-2xl font-semibold mb-4 sm:mb-6">Profile</h1>
+    return (<div className="pb-[calc(9rem+env(safe-area-inset-bottom,0px))] page-enter">
+      <div className="px-4 sm:px-6 pt-5 sm:pt-6 pb-6">
+        <h1 className="text-2xl font-bold text-foreground mb-4 sm:mb-6">Profile</h1>
 
         <div className="bg-card rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-border mb-4 sm:mb-6">
           <div className="flex items-center gap-3 sm:gap-4 mb-4">
@@ -155,7 +158,7 @@ export function Profile({ user, onNavigate, onLogout }) {
             <div className="flex-1 min-w-0">
               <h2 className="text-base sm:text-xl font-bold mb-1 truncate">{currentUser.name}</h2>
               <p className="text-muted-foreground text-xs sm:text-sm mb-2 truncate">{currentUser.email}</p>
-              <span className={`px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-wider ${getRoleBadgeColor(currentUser.role)}`}>
+              <span className={`px-2.5 py-0.5 rounded-full app-badge uppercase ${getRoleBadgeColor(currentUser.role)}`}>
                 {currentUser.role}
               </span>
             </div>
@@ -167,16 +170,16 @@ export function Profile({ user, onNavigate, onLogout }) {
 
         <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6">
           <div className="bg-card rounded-xl sm:rounded-2xl p-2.5 sm:p-4 border border-border text-center overflow-hidden">
-            <p className="text-base sm:text-xl font-bold mb-0.5 sm:mb-1 text-primary tabular-nums">{stats.activeGroups}</p>
-            <p className="text-muted-foreground text-[10px] sm:text-xs font-bold uppercase leading-tight">Groups</p>
+            <p className="app-value mb-1 text-primary">{stats.activeGroups}</p>
+            <p className="text-muted-foreground app-caption uppercase">Groups</p>
           </div>
           <div className="bg-card rounded-xl sm:rounded-2xl p-2.5 sm:p-4 border border-border text-center overflow-hidden">
-            <p className="text-[11px] sm:text-xl font-bold mb-0.5 sm:mb-1 text-primary tabular-nums truncate">{fmt(stats.totalCollected)}</p>
-            <p className="text-muted-foreground text-[10px] sm:text-xs font-bold uppercase leading-tight">Collected</p>
+            <p className="app-value mb-1 text-primary truncate">{fmt(stats.totalCollected)}</p>
+            <p className="text-muted-foreground app-caption uppercase">Collected</p>
           </div>
           <div className="bg-card rounded-xl sm:rounded-2xl p-2.5 sm:p-4 border border-border text-center overflow-hidden">
-            <p className="text-base sm:text-xl font-bold mb-0.5 sm:mb-1 text-primary tabular-nums">{stats.collectionRate}%</p>
-            <p className="text-muted-foreground text-[10px] sm:text-xs font-bold uppercase leading-tight">Success</p>
+            <p className="app-value mb-1 text-primary">{stats.collectionRate}%</p>
+            <p className="text-muted-foreground app-caption uppercase">Success</p>
           </div>
         </div>
 

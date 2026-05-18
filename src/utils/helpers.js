@@ -51,20 +51,20 @@ export function generateReceipt(payment, user, group) {
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Inter',sans-serif;background:#F8FAFB;color:#0D1117;max-width:440px;margin:40px auto;padding:32px;border-radius:16px;}
+body{font-family:'Inter',sans-serif;background:#F1F1F1;color:#0F1B2D;max-width:440px;margin:40px auto;padding:32px;border-radius:16px;}
 .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;}
-.logo{font-size:18px;font-weight:800;letter-spacing:-0.3px;color:#0D1117;}
-.logo em{color:#059669;font-style:normal;}
-.ref{font-size:10px;color:#6B7280;letter-spacing:.1em;font-family:'DM Mono',monospace;text-transform:uppercase;}
-.amount-box{background:#fff;border:1px solid rgba(13,17,23,0.08);border-radius:16px;padding:24px;text-align:center;margin-bottom:20px;}
+.logo{font-size:18px;font-weight:800;letter-spacing:-0.3px;color:#073D7F;}
+.logo em{color:#6491DE;font-style:normal;}
+.ref{font-size:10px;color:#4C6A8F;letter-spacing:.1em;font-family:'DM Mono',monospace;text-transform:uppercase;}
+.amount-box{background:#fff;border:1px solid rgba(7,61,127,0.10);border-radius:16px;padding:24px;text-align:center;margin-bottom:20px;}
 .amount{font-size:40px;font-weight:800;color:#059669;letter-spacing:-1.5px;}
 .badge{background:#ecfdf5;color:#059669;border:1px solid #a7f3d0;border-radius:20px;padding:4px 14px;font-size:11px;font-weight:700;display:inline-block;margin-top:8px;text-transform:uppercase;letter-spacing:.05em;}
-.rows{background:#fff;border:1px solid rgba(13,17,23,0.08);border-radius:16px;overflow:hidden;margin-bottom:20px;}
-.row{display:flex;justify-content:space-between;align-items:center;padding:13px 18px;border-bottom:1px solid rgba(13,17,23,0.06);font-size:13px;}
+.rows{background:#fff;border:1px solid rgba(7,61,127,0.10);border-radius:16px;overflow:hidden;margin-bottom:20px;}
+.row{display:flex;justify-content:space-between;align-items:center;padding:13px 18px;border-bottom:1px solid rgba(7,61,127,0.07);font-size:13px;}
 .row:last-of-type{border-bottom:none;}
-.lbl{color:#6B7280;font-weight:500;}
-.val{font-weight:600;color:#0D1117;}
-.val.mono{font-family:'DM Mono',monospace;font-size:11px;color:#059669;}
+.lbl{color:#4C6A8F;font-weight:500;}
+.val{font-weight:600;color:#0F1B2D;}
+.val.mono{font-family:'DM Mono',monospace;font-size:11px;color:#6491DE;}
 footer{text-align:center;margin-top:20px;font-size:11px;color:#9CA3AF;line-height:1.9;}
 @media print{button{display:none!important}body{background:#fff;margin:0;padding:24px;}}
 </style></head><body>

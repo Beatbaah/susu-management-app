@@ -13,7 +13,7 @@ export function MemberCard({ name, groupName, displayStatus, phone, email, ghana
       <div className="flex items-start gap-3 sm:gap-4 mb-4">
         <div className="relative">
           <div className={cn("w-11 h-11 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center font-semibold text-sm shadow-inner transition-transform group-hover:scale-105", isActive ? "bg-gradient-to-br from-primary to-primary/60 text-primary-foreground shadow-primary/20" :
-            isPending ? "bg-border text-foreground/40 border border-border" :
+            isPending ? "bg-border text-muted-foreground border border-border" :
                 "bg-destructive/10 text-destructive border border-destructive/20")}>
             {initials}
           </div>
@@ -25,22 +25,22 @@ export function MemberCard({ name, groupName, displayStatus, phone, email, ghana
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between">
             <div className="min-w-0">
-              <h4 className="text-sm sm:text-base font-semibold text-foreground truncate group-hover:text-primary transition-colors">{name}</h4>
-              <p className="eyebrow text-muted-foreground/50 mt-1">{groupName || 'No Group assigned'}</p>
+              <h4 className="app-row-title text-foreground truncate group-hover:text-primary transition-colors">{name}</h4>
+              <p className="app-caption text-muted-foreground mt-1">{groupName || 'No Group assigned'}</p>
             </div>
-            <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center text-foreground/30 group-hover:bg-primary group-hover:text-primary-foreground transition-all">
+            <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground transition-all">
               <ChevronRight className="w-4 h-4"/>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 mt-2">
-            <div className={cn("px-2.5 py-1 rounded-lg eyebrow flex items-center gap-1.5", isActive ? "bg-success/15 text-success" :
+            <div className={cn("px-2.5 py-1 rounded-lg app-badge flex items-center gap-1.5", isActive ? "bg-success/15 text-success" :
             isPending ? "bg-primary/15 text-primary" :
                 "bg-destructive/15 text-destructive")}>
               {isActive ? <UserCheck className="w-3 h-3"/> : <UserX className="w-3 h-3"/>}
               {displayStatus}
             </div>
-            {paymentCount != null && (<div className="px-2.5 py-1 rounded-lg bg-accent text-foreground/50 eyebrow">
+            {paymentCount != null && (<div className="px-2.5 py-1 rounded-lg bg-accent text-foreground/50 app-badge">
                 {paymentCount} Cycles
               </div>)}
           </div>
@@ -49,34 +49,34 @@ export function MemberCard({ name, groupName, displayStatus, phone, email, ghana
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 pt-4 border-t border-border">
         <div className="space-y-1">
-          <p className="eyebrow text-muted-foreground/50 flex items-center gap-1.5">
+          <p className="eyebrow text-muted-foreground flex items-center gap-1.5">
             <Phone className="w-3 h-3 text-primary/50"/>
             Contact
           </p>
-          <p className="text-[13px] sm:text-sm font-medium text-foreground/80">{phone || '—'}</p>
+          <p className="app-row-meta text-foreground/80">{phone || '—'}</p>
         </div>
         <div className="space-y-1">
-          <p className="eyebrow text-muted-foreground/50 flex items-center gap-1.5">
+          <p className="eyebrow text-muted-foreground flex items-center gap-1.5">
             <Zap className="w-3 h-3 text-warning/50"/>
             Contribution
           </p>
-          <p className="text-[13px] sm:text-sm font-semibold text-primary">{fmt(contributionAmount)}</p>
+          <p className="app-row-title text-primary">{fmt(contributionAmount)}</p>
         </div>
 
         {address && (<div className="col-span-2 space-y-1">
-            <p className="eyebrow text-muted-foreground/50 flex items-center gap-1.5">
+            <p className="eyebrow text-muted-foreground flex items-center gap-1.5">
               <MapPin className="w-3 h-3 text-destructive/50"/>
               Primary Address
             </p>
-            <p className="text-[13px] sm:text-sm font-medium text-foreground/60 truncate">{address}</p>
+            <p className="app-row-meta text-foreground/60 truncate">{address}</p>
           </div>)}
 
         {bankMomo && (<div className="col-span-2 space-y-1">
-            <p className="eyebrow text-muted-foreground/50 flex items-center gap-1.5">
+            <p className="eyebrow text-muted-foreground flex items-center gap-1.5">
               <CreditCard className="w-3 h-3 text-success/50"/>
               Payout Method
             </p>
-            <p className="text-[13px] sm:text-sm font-medium text-foreground/80">{bankMomo}</p>
+            <p className="app-row-meta text-foreground/80">{bankMomo}</p>
           </div>)}
 
         {liveSelfie && (<div className="col-span-2 mt-2">

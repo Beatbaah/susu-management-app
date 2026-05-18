@@ -18,7 +18,7 @@ export function MemberPortal() {
         <div className="flex items-start justify-between mb-4 sm:mb-6">
           <div>
             <p className="text-muted-foreground text-sm">Welcome back,</p>
-            <h1 className="text-2xl mt-1">{(me?.name || '').split(' ')[0]} 👋</h1>
+            <h1 className="text-2xl font-bold text-foreground mt-1">{(me?.name || '').split(' ')[0]} 👋</h1>
           </div>
           <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-primary/20 text-primary">
             {me?.role}

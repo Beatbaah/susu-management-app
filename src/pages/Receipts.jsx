@@ -7,12 +7,18 @@ import { ReceiptCard } from '../components/domain';
 import { fmt } from '../utils/helpers';
 import { renderReceiptDocument } from '../services/receiptService';
 export function Receipts() {
-    const { payments, users, groups, appReady } = useAppContext();
+    const { authUser, payments, users, groups, appReady } = useAppContext();
     const [search, setSearch] = useState('');
+    const visiblePayments = useMemo(() => {
+        if (authUser?.role === 'member') {
+            return payments.filter(p => (p.memberId || p.userId) === authUser.id);
+        }
+        return payments;
+    }, [payments, authUser]);
     // Project receipts from confirmed payments. In Phase 3 this becomes a query
     // to the receipts/ collection (receiptService.listReceipts).
     const receipts = useMemo(() => {
-        const paid = payments.filter(p => p.status === 'paid');
+        const paid = visiblePayments.filter(p => p.status === 'paid');
         return paid.map(payment => {
             const member = users.find(m => m.id === (payment.memberId || payment.userId));
             const group = groups.find(g => g.id === payment.groupId);
@@ -32,7 +38,7 @@ export function Receipts() {
                 rawGroup: group,
             };
         });
-    }, [payments, users, groups]);
+    }, [visiblePayments, users, groups]);
     const filtered = receipts.filter(r => {
         const q = search.trim().toLowerCase();
         if (!q)

@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown, Users, Users2, DollarSign, AlertCircle, CheckCircle, ChevronRight, ArrowRight, Zap, History, } from 'lucide-react';
+import { TrendingUp, TrendingDown, Users, Users2, AlertCircle, CheckCircle, ChevronRight, ArrowRight, Zap, History, } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 import { useMemo } from 'react';
 import { StatCard } from '../components/ui/StatCard';
@@ -82,24 +82,24 @@ export function Dashboard({ user, onNavigate }) {
         <div>
           <div className="flex items-center gap-1.5 mb-1.5">
             <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-success"/>
-            <p className="eyebrow text-muted-foreground/50">Live</p>
+            <p className="eyebrow text-muted-foreground">Live</p>
           </div>
 
-          <h1 className="page-title text-foreground mb-1">
+          <h1 className="text-2xl font-bold text-foreground mb-1">
             Morning, <span className="text-primary">{user.name.split(' ')[0]}</span>
           </h1>
 
-          <p className="body text-muted-foreground/70">
+          <p className="body text-muted-foreground">
             {pendingCount > 0 ? (<>{pendingCount} transaction{pendingCount !== 1 ? 's' : ''} pending confirmation.</>) : ('No pending actions. All clear.')}
           </p>
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto">
-          <button onClick={() => onNavigate?.('payments')} className={cn('h-9 px-3.5 rounded-lg text-[13px] font-medium', 'flex flex-1 sm:flex-none items-center justify-center gap-1.5', 'bg-accent border border-border', 'hover:bg-accent/80 transition-colors duration-150', 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60')}>
+          <button onClick={() => onNavigate?.('payments')} className={cn('h-9 px-3.5 rounded-lg app-control', 'flex flex-1 sm:flex-none items-center justify-center gap-1.5', 'bg-accent border border-border', 'hover:bg-accent/80 transition-colors duration-150', 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60')}>
             <History className="w-3.5 h-3.5 text-primary"/>
             <span>Activity</span>
           </button>
-          <button onClick={() => onNavigate?.('analytics')} className={cn('h-9 px-3.5 rounded-lg text-[13px] font-medium', 'flex flex-1 sm:flex-none items-center justify-center gap-1.5', 'bg-primary text-primary-foreground', 'hover:opacity-90 active:scale-95 transition-all duration-150', 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60')}>
+          <button onClick={() => onNavigate?.('analytics')} className={cn('h-9 px-3.5 rounded-lg app-control', 'flex flex-1 sm:flex-none items-center justify-center gap-1.5', 'bg-primary text-primary-foreground', 'hover:opacity-90 active:scale-95 transition-all duration-150', 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60')}>
             <Zap className="w-3.5 h-3.5"/>
             <span>Reports</span>
           </button>
@@ -114,7 +114,7 @@ export function Dashboard({ user, onNavigate }) {
               <div className="space-y-4">
                 <div>
                   <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-primary/10 mb-2.5">
-                    <DollarSign className="w-3 h-3 text-primary/70" aria-hidden="true"/>
+                    <span className="app-badge text-primary/70" aria-hidden="true">₵</span>
                     <span className="eyebrow text-primary/70">Total pool collected</span>
                   </div>
                   <p className="text-2xl font-semibold text-foreground tracking-tight stat-value leading-none break-words">
@@ -129,7 +129,7 @@ export function Dashboard({ user, onNavigate }) {
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-foreground leading-none">{collectionRate}%</p>
-                      <p className="eyebrow text-muted-foreground/50 mt-0.5">Success rate</p>
+                      <p className="eyebrow text-muted-foreground mt-0.5">Success rate</p>
                     </div>
                   </div>
 
@@ -141,7 +141,7 @@ export function Dashboard({ user, onNavigate }) {
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-foreground leading-none">{fmt(totalExpectedLifecycle)}</p>
-                      <p className="eyebrow text-muted-foreground/50 mt-0.5">Lifecycle target</p>
+                      <p className="eyebrow text-muted-foreground mt-0.5">Lifecycle target</p>
                     </div>
                   </div>
                 </div>
@@ -174,9 +174,9 @@ export function Dashboard({ user, onNavigate }) {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="section-title text-foreground">Recent activity</h3>
-                <p className="eyebrow text-muted-foreground/40 mt-0.5">Latest transactions</p>
+                <p className="eyebrow text-muted-foreground mt-0.5">Latest transactions</p>
               </div>
-              <button onClick={() => onNavigate?.('payments')} className={cn('flex items-center gap-0.5 px-2.5 h-7 rounded-md text-[13px] font-medium', 'text-primary hover:bg-primary/8 transition-colors duration-150', 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60')}>
+              <button onClick={() => onNavigate?.('payments')} className={cn('flex items-center gap-0.5 px-2.5 h-7 rounded-md app-control', 'text-primary hover:bg-primary/8 transition-colors duration-150', 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60')}>
                 View all
                 <ChevronRight className="w-3.5 h-3.5" aria-hidden="true"/>
               </button>
@@ -184,7 +184,7 @@ export function Dashboard({ user, onNavigate }) {
 
             <div className="space-y-2">
               {recentPayments.length === 0 ? (<div className="py-10 text-center">
-                  <p className="eyebrow text-muted-foreground/40">No recent transactions recorded</p>
+                  <p className="eyebrow text-muted-foreground">No recent transactions recorded</p>
                 </div>) : recentPayments.map((payment) => (<div key={payment.id} className={cn('group flex items-center justify-between gap-3 p-3.5 rounded-xl', 'border border-transparent hover:border-border hover:bg-accent/40', 'transition-all duration-200')}>
                   <div className="flex items-center gap-3.5">
                     <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', 'font-bold text-sm flex-shrink-0', 'transition-transform duration-200 group-hover:scale-105', statusPill(payment.status))}>
@@ -194,12 +194,12 @@ export function Dashboard({ user, onNavigate }) {
                       <p className="body-strong text-foreground group-hover:text-primary transition-colors truncate">
                         {payment.memberName}
                       </p>
-                      <p className="eyebrow text-muted-foreground/60 mt-0.5 truncate">{payment.groupName}</p>
+                      <p className="eyebrow text-muted-foreground mt-0.5 truncate">{payment.groupName}</p>
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="body-strong text-foreground">{fmt(payment.amount)}</p>
-                    <p className="label text-muted-foreground/50 mt-0.5">
+                    <p className="label text-muted-foreground mt-0.5">
                       {payment.paymentDate
                 ? new Date(payment.paymentDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
                 : 'Pending'}
@@ -215,7 +215,7 @@ export function Dashboard({ user, onNavigate }) {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="section-title text-foreground">Growth trend</h3>
-                <p className="eyebrow text-muted-foreground/40 mt-0.5">Collection performance</p>
+                <p className="eyebrow text-muted-foreground mt-0.5">Collection performance</p>
               </div>
               <div className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium', trendDelta >= 0 ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive')}>
                 {trendDelta >= 0
@@ -240,8 +240,8 @@ export function Dashboard({ user, onNavigate }) {
             </div>
 
             <div className="flex items-center justify-between mt-4">
-              <p className="eyebrow text-muted-foreground/40">Past 6 Months</p>
-              <p className="eyebrow text-muted-foreground/40">Growth</p>
+              <p className="eyebrow text-muted-foreground">Past 6 Months</p>
+              <p className="eyebrow text-muted-foreground">Growth</p>
             </div>
           </section>
 
@@ -249,7 +249,7 @@ export function Dashboard({ user, onNavigate }) {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="section-title text-foreground">Next payouts</h3>
-                <p className="eyebrow text-muted-foreground/40 mt-0.5">Susu cycle rewards</p>
+                <p className="eyebrow text-muted-foreground mt-0.5">Susu cycle rewards</p>
               </div>
               <button onClick={() => onNavigate?.('payout')} aria-label="View all payouts" className={cn('w-7 h-7 rounded-lg flex items-center justify-center', 'text-primary/70 hover:bg-primary/8 transition-colors duration-150', 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60')}>
                 <ArrowRight className="w-3.5 h-3.5" aria-hidden="true"/>
@@ -258,16 +258,16 @@ export function Dashboard({ user, onNavigate }) {
 
             <div className="space-y-5">
               {upcomingPayouts.length === 0 ? (<div className="py-6 text-center border-2 border-dashed border-border rounded-xl">
-                  <p className="eyebrow text-muted-foreground/40">No payouts scheduled</p>
+                  <p className="eyebrow text-muted-foreground">No payouts scheduled</p>
                 </div>) : upcomingPayouts.map((payout) => (<div key={payout.id} className="relative pl-5 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-primary/30 before:rounded-full group">
                   <div className="flex items-start justify-between mb-1.5">
                     <div>
                       <p className="body-strong text-foreground group-hover:text-primary transition-colors">{payout.memberName}</p>
-                      <p className="eyebrow text-muted-foreground/50 mt-0.5">{payout.groupName}</p>
+                      <p className="eyebrow text-muted-foreground mt-0.5">{payout.groupName}</p>
                     </div>
                     <div className="text-right flex-shrink-0 ml-4">
                       <p className="body-strong text-primary">{fmt(payout.payoutAmount || payout.amount || 0)}</p>
-                      <p className="label text-muted-foreground/50 mt-0.5">{payout.scheduledDate}</p>
+                      <p className="label text-muted-foreground mt-0.5">{payout.scheduledDate}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 text-success/70">
@@ -277,7 +277,7 @@ export function Dashboard({ user, onNavigate }) {
                 </div>))}
             </div>
 
-            <button onClick={() => onNavigate?.('payout')} className={cn('w-full mt-4 py-2 rounded-lg text-[13px] font-medium', 'bg-accent border border-border', 'text-muted-foreground/70 hover:text-foreground hover:bg-accent/80', 'transition-colors duration-150', 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60')}>
+            <button onClick={() => onNavigate?.('payout')} className={cn('w-full mt-4 py-2 rounded-lg app-control', 'bg-accent border border-border', 'text-muted-foreground hover:text-foreground hover:bg-accent/80', 'transition-colors duration-150', 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60')}>
               Manage payout pipeline
             </button>
           </section>

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { validatePassword } from '../validation/authRules';
 import { changePassword } from '../services/authService';
-import { toast, confirmToast } from '../utils/toast';
+import { toast } from '../utils/toast';
 const LANGUAGES = [
     { code: 'English', label: 'English', flag: '🇬🇧' },
     { code: 'Twi', label: 'Twi (Akan)', flag: '🇬🇭' },
@@ -21,7 +21,7 @@ const CURRENCIES = [
     { code: 'XOF (CFA)', label: 'CFA Franc', symbol: 'CFA' },
 ];
 export function Settings() {
-    const { settings, updateSetting, payments, users, groups, schedule, auditLogs, resetAllData, setUsers, setPayments, setGroups, setSchedule, } = useAppContext();
+    const { settings, updateSetting, payments, users, groups, schedule, auditLogs, setUsers, setPayments, setGroups, setSchedule, } = useAppContext();
     const [dialog, setDialog] = useState(null);
     const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
     const [pwError, setPwError] = useState(null);
@@ -76,18 +76,6 @@ export function Settings() {
         catch {
             toast.error('Could not clear cache');
         }
-    };
-    const handleReset = async () => {
-        const ok = await confirmToast({
-            title: 'Reset all local data?',
-            description: 'You will be signed out and demo data restored. This cannot be undone.',
-            confirmLabel: 'Reset',
-            destructive: true,
-        });
-        if (!ok)
-            return;
-        resetAllData();
-        toast.success('All data reset');
     };
     const submitPasswordChange = async () => {
         setPwError(null);
@@ -204,24 +192,6 @@ export function Settings() {
             })}
             </div>
           </div>))}
-
-        <div className="mb-6">
-          <h4 className="text-muted-foreground text-sm mb-3 px-2">Danger Zone</h4>
-          <div className="bg-card rounded-2xl border border-destructive/50 overflow-hidden">
-            <button type="button" onClick={handleReset} className="w-full flex items-center justify-between p-4 hover:bg-destructive/10 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-destructive/20 rounded-xl flex items-center justify-center">
-                  <Trash2 className="w-5 h-5 text-destructive"/>
-                </div>
-                <div className="text-left">
-                  <p className="text-destructive">Reset All Data</p>
-                  <p className="text-destructive/70 text-xs">Sign out and restore demo data</p>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5 text-destructive"/>
-            </button>
-          </div>
-        </div>
 
         <div className="text-center text-muted-foreground text-xs">
           <p>Excellent Susu v1.0.0</p>
@@ -351,8 +321,8 @@ export function Settings() {
     </div>);
 }
 function SettingsDialog({ title, onClose, children }) {
-    return (<div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-card rounded-3xl border border-border w-full max-w-md p-6 shadow-2xl">
+    return (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-card rounded-3xl border border-border w-full max-w-md p-6">
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-lg font-bold">{title}</h3>
           <button type="button" onClick={onClose} className="p-2 rounded-xl hover:bg-muted/50">

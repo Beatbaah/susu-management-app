@@ -7,8 +7,8 @@ import { registerMember as svcRegisterMember, approveMember as svcApproveMember,
 import { listGroups, createGroup as svcCreateGroup, updateGroup as svcUpdateGroup, replaceGroups as svcReplaceGroups, } from '../services/groupService';
 import { listPayments, recordPayment as svcRecordPayment, confirmPayment as svcConfirmPayment, rejectPayment as svcRejectPayment, updatePayment as svcUpdatePayment, replacePayments as svcReplacePayments, markOverduePayments as svcMarkOverduePayments, } from '../services/paymentService';
 import { listPayouts, completePayout as svcCompletePayout, assignPayoutRecipient as svcAssignPayoutRecipient, replacePayouts as svcReplacePayouts, } from '../services/payoutService';
-import { postMessage as svcPostMessage } from '../services/chatService';
-import { listReminders, sendReminder as svcSendReminder, markRead as svcMarkRead, markAllRead as svcMarkAllRead, replaceReminders as svcReplaceReminders, } from '../services/notificationService';
+import { postMessage as svcPostMessage, postAnnouncement as svcPostAnnouncement, addReaction as svcAddReaction } from '../services/chatService';
+import { listReminders, sendReminder as svcSendReminder, markRead as svcMarkRead, markAllRead as svcMarkAllRead, deleteReminder as svcDeleteReminder, clearReminders as svcClearReminders, replaceReminders as svcReplaceReminders, } from '../services/notificationService';
 import { listLogs, appendLog, clearLogs as svcClearLogs } from '../services/auditService';
 import { getCurrentUser, setCurrentUser } from '../services/authService';
 import { isFirestoreReady, subscribeCollection } from '../services/firestoreSync';
@@ -66,6 +66,7 @@ export const AppProvider = ({ children }) => {
     const [schedule, setSchedule] = useState(() => initial.schedule);
     const [auditLogs, setAuditLogs] = useState(() => initial.auditLogs);
     const [settings, setSettings] = useState(() => initial.settings);
+    const [dismissedNotifications, setDismissedNotifications] = useState({ members: [], payments: [] });
     // appReady gates skeleton-vs-real content on list pages. True immediately
     // in demo mode; in Firestore mode, true once the first snapshot lands or
     // after a 1.5 s safety timeout (so we never block forever on a slow network).
@@ -378,6 +379,23 @@ export const AppProvider = ({ children }) => {
             setGroups(listGroups());
         return entry;
     };
+    const getGroupMemberIds = (groupId) => {
+        const g = groups.find(x => x.id === groupId);
+        return Array.isArray(g?.members) ? g.members : [];
+    };
+    const postAnnouncement = (groupId, message) => {
+        const entry = svcPostAnnouncement(groupId, authUser, message);
+        if (entry) {
+            setGroups(listGroups());
+            sendReminder({ userIds: getGroupMemberIds(groupId), title: '📢 Announcement', text: message, type: 'info' });
+        }
+        return entry;
+    };
+    const addChatReaction = (groupId, messageId, emoji) => {
+        if (!authUser) return;
+        svcAddReaction(groupId, messageId, emoji, authUser.id);
+        setGroups(listGroups());
+    };
     const sendReminder = ({ userIds, title, text, type = 'info' }) => {
         const created = svcSendReminder({ userIds, title, text, type: type });
         setReminders(prev => [...created, ...prev]);
@@ -391,6 +409,35 @@ export const AppProvider = ({ children }) => {
     const markAllRemindersRead = () => {
         svcMarkAllRead();
         setReminders(prev => prev.map(r => ({ ...r, read: true })));
+    };
+    const deleteReminder = (reminderId) => {
+        svcDeleteReminder(reminderId);
+        setReminders(prev => prev.filter(r => r.id !== reminderId));
+    };
+    const clearReminders = () => {
+        svcClearReminders();
+        setReminders([]);
+    };
+    const dismissMemberNotification = (userId) => {
+        setDismissedNotifications(prev => prev.members.includes(userId)
+            ? prev
+            : { ...prev, members: [...prev.members, userId] });
+    };
+    const dismissPaymentNotification = (paymentId) => {
+        setDismissedNotifications(prev => prev.payments.includes(paymentId)
+            ? prev
+            : { ...prev, payments: [...prev.payments, paymentId] });
+    };
+    const dismissAllNotifications = () => {
+        const pendingMemberIds = users.filter(user => user.role === 'member' && user.status === 'pending').map(user => user.id);
+        const pendingPaymentIds = settings.notifPaymentReminders
+            ? payments.filter(payment => payment.status === 'pending').map(payment => payment.id)
+            : [];
+        setDismissedNotifications({ members: pendingMemberIds, payments: pendingPaymentIds });
+    };
+    const clearAllNotifications = () => {
+        clearReminders();
+        dismissAllNotifications();
     };
     return (<AppContext.Provider value={{
             authUser, setAuthUser,
@@ -406,8 +453,8 @@ export const AppProvider = ({ children }) => {
             completePayout, assignPayoutRecipient,
             registerMember, updateMember, approveUser, rejectUser,
             createGroup, updateGroup,
-            postChatMessage,
-            sendReminder, markReminderRead, markAllRemindersRead,
+            postChatMessage, postAnnouncement, addChatReaction,
+            sendReminder, markReminderRead, markAllRemindersRead, deleteReminder, clearReminders, dismissMemberNotification, dismissPaymentNotification, dismissAllNotifications, clearAllNotifications,
             clearAuditLogs,
             resetAllData,
             assignUserToGroup,

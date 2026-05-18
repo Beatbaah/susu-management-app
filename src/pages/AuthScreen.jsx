@@ -385,7 +385,7 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
                                                 ? <CheckCircle className="mx-auto mb-1 h-4 w-4"/>
                                                 : <StepIcon className="mx-auto mb-1 h-4 w-4"/>
                                             }
-                                            <span className="text-[10px] font-bold uppercase tracking-tight leading-none">{s.title}</span>
+                                            <span className="app-badge uppercase">{s.title}</span>
                                         </button>
                                     );
                                 })}

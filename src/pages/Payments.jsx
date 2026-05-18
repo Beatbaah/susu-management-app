@@ -2,7 +2,6 @@ import { Search, Plus, CheckCircle, Clock, XCircle, Upload, X } from 'lucide-rea
 import { useMemo, useState } from 'react';
 import { EmptyState } from '../components/ui/EmptyState';
 import { SkeletonList } from '../components/ui/LoadingState';
-import { PaymentCard } from '../components/domain';
 import { fmt } from '../utils/helpers';
 import { useAppContext } from '../context/AppContext';
 import { toast } from '../utils/toast';
@@ -23,7 +22,13 @@ export function Payments() {
     const [draft, setDraft] = useState(EMPTY_DRAFT);
     const [dialogError, setDialogError] = useState(null);
     const memberOptions = useMemo(() => users.filter(u => u.role === 'member' && u.status === 'approved'), [users]);
-    const paymentsWithDetails = useMemo(() => payments.map(payment => {
+    const visiblePayments = useMemo(() => {
+        if (authUser?.role === 'member') {
+            return payments.filter(p => (p.memberId || p.userId) === authUser.id);
+        }
+        return payments;
+    }, [payments, authUser]);
+    const paymentsWithDetails = useMemo(() => visiblePayments.map(payment => {
         const member = users.find(m => m.id === (payment.memberId || payment.userId));
         const group = groups.find(g => g.id === payment.groupId);
         let daysOverdue = 0;
@@ -48,9 +53,9 @@ export function Payments() {
         const matchesFilter = filterStatus === 'all' || payment.status === filterStatus;
         return matchesSearch && matchesFilter;
     });
-    const totalConfirmed = payments.filter(p => p.status === 'paid').reduce((sum, p) => sum + Number(p.amount || 0), 0);
-    const totalPending = payments.filter(p => p.status === 'pending').reduce((sum, p) => sum + Number(p.amount || 0), 0);
-    const totalOverdue = payments.filter(p => p.status === 'overdue').length;
+    const totalConfirmed = visiblePayments.filter(p => p.status === 'paid').reduce((sum, p) => sum + Number(p.amount || 0), 0);
+    const totalPending = visiblePayments.filter(p => p.status === 'pending').reduce((sum, p) => sum + Number(p.amount || 0), 0);
+    const totalOverdue = visiblePayments.filter(p => p.status === 'overdue').length;
     // null = create / record new payment; otherwise editing an existing record.
     const [editingId, setEditingId] = useState(null);
     const openDialog = (prefill) => {
@@ -135,37 +140,10 @@ export function Payments() {
     };
     const canRecord = authUser && ['admin', 'manager', 'collector'].includes(authUser.role);
     const canConfirm = authUser && ['admin', 'manager'].includes(authUser.role);
-    const renderFooter = (payment) => {
-        if (payment.status === 'pending' && canConfirm) {
-            return (<div className="flex gap-2">
-          <button type="button" onClick={() => { confirmPayment(payment.id); toast.success(`Confirmed ${fmt(payment.amount)} from ${payment.memberName}`); }} className="flex-1 bg-success text-success-foreground py-2 rounded-xl flex items-center justify-center gap-2">
-            <CheckCircle className="w-4 h-4"/>
-            Confirm
-          </button>
-          <button type="button" onClick={() => { rejectPayment(payment.id); toast.error(`Rejected payment from ${payment.memberName}`); }} className="flex-1 bg-destructive/20 text-destructive py-2 rounded-xl flex items-center justify-center gap-2">
-            <XCircle className="w-4 h-4"/>
-            Reject
-          </button>
-        </div>);
-        }
-        if (payment.status === 'overdue' && canRecord) {
-            return (<button type="button" onClick={() => openDialog({
-                    memberId: payment.memberId || payment.userId || '',
-                    groupId: payment.groupId,
-                    amount: String(payment.amount),
-                    round: String(payment.round || ''),
-                    dueDate: payment.dueDate || '',
-                })} className="w-full bg-primary text-primary-foreground py-2 rounded-xl flex items-center justify-center gap-2">
-          <Upload className="w-4 h-4"/>
-          Record Payment
-        </button>);
-        }
-        return null;
-    };
     return (<div className="pb-28 page-enter">
       <div className="px-4 sm:px-6 pt-4 sm:pt-6 pb-4">
         <div className="flex items-center justify-between mb-4 sm:mb-6">
-          <h1 className="text-xl sm:text-2xl font-semibold">Payments</h1>
+          <h1 className="app-title text-foreground">Payments</h1>
           {canRecord && (<button type="button" onClick={() => openDialog()} className="p-2.5 sm:p-3 bg-primary rounded-2xl" aria-label="Record new payment">
               <Plus className="w-5 h-5 sm:w-6 sm:h-6 text-primary-foreground"/>
             </button>)}
@@ -179,37 +157,118 @@ export function Payments() {
         <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6">
           <div className="bg-card rounded-xl sm:rounded-2xl p-2.5 sm:p-4 border border-border overflow-hidden">
             <CheckCircle className="w-5 h-5 sm:w-8 sm:h-8 text-success mb-1 sm:mb-2"/>
-            <p className="text-muted-foreground text-[10px] sm:text-xs mb-0.5 sm:mb-1">Confirmed</p>
-            <p className="text-[11px] sm:text-lg font-semibold tabular-nums truncate">{fmt(totalConfirmed)}</p>
+            <p className="app-caption text-muted-foreground mb-1">Confirmed</p>
+            <p className="app-value truncate text-foreground">{fmt(totalConfirmed)}</p>
           </div>
           <div className="bg-card rounded-xl sm:rounded-2xl p-2.5 sm:p-4 border border-border overflow-hidden">
             <Clock className="w-5 h-5 sm:w-8 sm:h-8 text-primary mb-1 sm:mb-2"/>
-            <p className="text-muted-foreground text-[10px] sm:text-xs mb-0.5 sm:mb-1">Pending</p>
-            <p className="text-[11px] sm:text-lg font-semibold tabular-nums truncate">{fmt(totalPending)}</p>
+            <p className="app-caption text-muted-foreground mb-1">Pending</p>
+            <p className="app-value truncate text-foreground">{fmt(totalPending)}</p>
           </div>
           <div className="bg-card rounded-xl sm:rounded-2xl p-2.5 sm:p-4 border border-border overflow-hidden">
             <XCircle className="w-5 h-5 sm:w-8 sm:h-8 text-destructive mb-1 sm:mb-2"/>
-            <p className="text-muted-foreground text-[10px] sm:text-xs mb-0.5 sm:mb-1">Overdue</p>
-            <p className="text-sm sm:text-2xl font-bold tabular-nums">{totalOverdue}</p>
+            <p className="app-caption text-muted-foreground mb-1">Overdue</p>
+            <p className="app-value text-foreground">{totalOverdue}</p>
           </div>
         </div>
 
-        <div className="flex gap-2 mb-4 sm:mb-6 overflow-x-auto no-scrollbar pb-1">
-          {['all', 'paid', 'pending', 'overdue'].map(status => (<button key={status} onClick={() => setFilterStatus(status)} className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl whitespace-nowrap text-xs sm:text-sm transition-colors ${filterStatus === status
+        <div className="flex rounded-xl border border-border bg-card/70 p-1 mb-4 sm:mb-6 overflow-x-auto no-scrollbar">
+          {['all', 'paid', 'pending', 'overdue'].map(status => (<button key={status} onClick={() => setFilterStatus(status)} className={`min-w-0 flex-1 px-2.5 py-1.5 rounded-lg whitespace-nowrap app-tab transition-colors flex-shrink-0 ${filterStatus === status
                 ? 'bg-primary text-primary-foreground'
-                : 'bg-card text-muted-foreground border border-border'}`}>
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}>
               {status === 'all' ? 'All' : status === 'paid' ? 'Confirmed' : status.charAt(0).toUpperCase() + status.slice(1)}
             </button>))}
         </div>
       </div>
 
       <div className="px-4 sm:px-6">
-        {!appReady && filteredPayments.length === 0 ? (<SkeletonList count={4}/>) : filteredPayments.length === 0 ? (<EmptyState icon={CheckCircle} title="No payments found" description="Try adjusting your search or filter criteria" action={{
-                label: 'Clear Filters',
-                onClick: () => { setSearchTerm(''); setFilterStatus('all'); }
-            }}/>) : (<div className="space-y-3">
-            {filteredPayments.map((payment) => (<PaymentCard key={payment.id} memberName={payment.memberName} groupName={payment.groupName} amount={payment.amount} status={payment.status} daysOverdue={payment.daysOverdue} dueDate={payment.dueDate} paymentDate={payment.paymentDate || payment.date} method={payment.method} reference={payment.ref} footer={renderFooter(payment)} onEdit={canRecord && payment.status !== 'paid' ? () => openEditDialog(payment) : undefined}/>))}
-          </div>)}
+        {!appReady && filteredPayments.length === 0 ? (
+          <SkeletonList count={4}/>
+        ) : filteredPayments.length === 0 ? (
+          <EmptyState icon={CheckCircle} title="No payments found" description="Try adjusting your search or filter criteria" action={{ label: 'Clear Filters', onClick: () => { setSearchTerm(''); setFilterStatus('all'); }}}/>
+        ) : (
+          <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
+            <div className="hidden sm:grid grid-cols-[minmax(140px,2fr)_minmax(100px,1.2fr)_90px_90px_90px_110px_72px] gap-x-3 px-4 py-2 border-b border-border bg-muted/20">
+              <span className="eyebrow text-muted-foreground">Member</span>
+              <span className="eyebrow text-muted-foreground">Group</span>
+              <span className="eyebrow text-muted-foreground">Amount</span>
+              <span className="eyebrow text-muted-foreground">Status</span>
+              <span className="eyebrow text-muted-foreground">Date</span>
+              <span className="eyebrow text-muted-foreground">Method</span>
+              <span className="sr-only">Actions</span>
+            </div>
+            <div className="divide-y divide-border">
+              {filteredPayments.map((payment) => {
+                const initials = payment.memberName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+                const SC = { paid: 'bg-success/15 text-success', pending: 'bg-primary/15 text-primary', overdue: 'bg-destructive/15 text-destructive' };
+                const SL = { paid: 'Confirmed', pending: 'Pending', overdue: 'Overdue' };
+                const rawDate = payment.paymentDate || payment.date || payment.dueDate;
+                const displayDate = rawDate ? new Date(rawDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '—';
+                return (
+                  <div key={payment.id} className="group">
+                    {/* Desktop row */}
+                    <div className="hidden sm:grid grid-cols-[minmax(140px,2fr)_minmax(100px,1.2fr)_90px_90px_90px_110px_72px] items-center gap-x-3 px-4 py-2.5 hover:bg-muted/30 transition-colors">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary app-value flex-shrink-0">{initials}</div>
+                        <span className="app-row-title text-foreground truncate">{payment.memberName}</span>
+                      </div>
+                      <p className="app-row-meta text-muted-foreground truncate">{payment.groupName}</p>
+                      <p className="app-row-title text-foreground">{fmt(payment.amount)}</p>
+                      <span className={`app-badge px-2 py-0.5 rounded-full w-fit ${SC[payment.status] || 'bg-muted text-muted-foreground'}`}>{SL[payment.status] || payment.status}</span>
+                      <p className="app-caption text-muted-foreground">{displayDate}</p>
+                      <p className="app-caption text-muted-foreground truncate">{payment.method || '—'}</p>
+                      <div className="flex items-center gap-1">
+                        {payment.status === 'pending' && canConfirm && (<>
+                          <button type="button" onClick={() => { confirmPayment(payment.id); toast.success(`Confirmed ${fmt(payment.amount)}`); }} className="w-7 h-7 rounded-lg bg-success/15 text-success hover:bg-success/25 flex items-center justify-center" title="Confirm"><CheckCircle className="w-3.5 h-3.5"/></button>
+                          <button type="button" onClick={() => { rejectPayment(payment.id); toast.error(`Rejected payment`); }} className="w-7 h-7 rounded-lg bg-destructive/15 text-destructive hover:bg-destructive/25 flex items-center justify-center" title="Reject"><XCircle className="w-3.5 h-3.5"/></button>
+                        </>)}
+                        {payment.status === 'overdue' && canRecord && (
+                          <button type="button" onClick={() => openDialog({ memberId: payment.memberId || payment.userId || '', groupId: payment.groupId, amount: String(payment.amount), round: String(payment.round || ''), dueDate: payment.dueDate || '' })} className="w-7 h-7 rounded-lg bg-primary/15 text-primary hover:bg-primary/25 flex items-center justify-center" title="Record"><Upload className="w-3.5 h-3.5"/></button>
+                        )}
+                        {canRecord && payment.status !== 'paid' && (
+                          <button type="button" onClick={() => openEditDialog(payment)} className="w-7 h-7 rounded-lg bg-muted text-muted-foreground hover:bg-accent hover:text-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" title="Edit">
+                            <span className="app-badge leading-none">✎</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {/* Mobile row */}
+                    <div className="sm:hidden px-4 py-3 hover:bg-muted/30 transition-colors">
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary app-value flex-shrink-0 mt-0.5">{initials}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="app-row-title text-foreground truncate">{payment.memberName}</p>
+                            <p className="app-row-title text-foreground flex-shrink-0">{fmt(payment.amount)}</p>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 mt-0.5">
+                            <p className="app-row-meta text-muted-foreground truncate">{payment.groupName} · {displayDate}</p>
+                            <span className={`app-badge px-1.5 py-0.5 rounded-full flex-shrink-0 ${SC[payment.status] || 'bg-muted text-muted-foreground'}`}>{SL[payment.status] || payment.status}</span>
+                          </div>
+                        </div>
+                      </div>
+                      {((payment.status === 'pending' && canConfirm) || (payment.status === 'overdue' && canRecord)) && (
+                        <div className="flex gap-2 mt-2.5 pl-10">
+                          {payment.status === 'pending' && canConfirm && (<>
+                            <button type="button" onClick={() => { confirmPayment(payment.id); toast.success(`Confirmed ${fmt(payment.amount)}`); }} className="flex-1 py-1.5 rounded-lg bg-success/15 text-success app-action flex items-center justify-center gap-1.5"><CheckCircle className="w-3 h-3"/>Confirm</button>
+                            <button type="button" onClick={() => { rejectPayment(payment.id); toast.error(`Rejected payment`); }} className="flex-1 py-1.5 rounded-lg bg-destructive/15 text-destructive app-action flex items-center justify-center gap-1.5"><XCircle className="w-3 h-3"/>Reject</button>
+                          </>)}
+                          {payment.status === 'overdue' && canRecord && (
+                            <button type="button" onClick={() => openDialog({ memberId: payment.memberId || payment.userId || '', groupId: payment.groupId, amount: String(payment.amount), round: String(payment.round || ''), dueDate: payment.dueDate || '' })} className="flex-1 py-1.5 rounded-lg bg-primary/15 text-primary app-action flex items-center justify-center gap-1.5"><Upload className="w-3 h-3"/>Record</button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="px-4 py-2 border-t border-border bg-muted/10 flex items-center justify-between">
+              <p className="app-caption text-muted-foreground">{filteredPayments.length} of {paymentsWithDetails.length} payments</p>
+              {(searchTerm || filterStatus !== 'all') && <button type="button" onClick={() => { setSearchTerm(''); setFilterStatus('all'); }} className="app-caption text-primary hover:underline">Clear filters</button>}
+            </div>
+          </div>
+        )}
       </div>
 
       {dialogOpen && (<div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">

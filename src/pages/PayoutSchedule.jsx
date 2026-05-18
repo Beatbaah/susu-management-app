@@ -1,4 +1,4 @@
-import { Calendar, Clock, List, CalendarDays, CheckCircle2, Users } from 'lucide-react';
+import { Calendar, List, CalendarDays, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { SkeletonList } from '../components/ui/LoadingState';
 import { PayoutCard } from '../components/domain';
@@ -10,6 +10,7 @@ export function PayoutSchedule() {
     const { schedule, users, groups, completePayout, assignPayoutRecipient, authUser, appReady } = useAppContext();
     const canManage = authUser && ['admin', 'manager'].includes(authUser.role);
     const [view, setView] = useState('list');
+    const [statusFilter, setStatusFilter] = useState('all');
     const [assigningPayout, setAssigningPayout] = useState(null);
     const [selectedRecipient, setSelectedRecipient] = useState('');
     const payoutsWithDetails = useMemo(() => schedule.map((payout) => {
@@ -23,11 +24,24 @@ export function PayoutSchedule() {
             totalRounds,
         };
     }), [schedule, users, groups]);
-    const isOpenPayout = (payout) => !payout.paid && !['completed', 'paid'].includes(String(payout.status || '').toLowerCase());
-    const scheduled = payoutsWithDetails.filter(isOpenPayout);
-    const completed = payoutsWithDetails.filter(p => p.status === 'completed' || p.status === 'paid');
-    const totalScheduledAmount = scheduled.reduce((sum, p) => sum + Number(p.payoutAmount || p.amount || 0), 0);
+    const isCompleted = (p) => ['completed', 'paid'].includes(String(p.status || '').toLowerCase()) || p.paid;
+    const hasRecipient = (p) => !!(p.memberId || p.recipientId);
+    const unassigned = payoutsWithDetails.filter(p => !isCompleted(p) && !hasRecipient(p));
+    const pending = payoutsWithDetails.filter(p => !isCompleted(p) && hasRecipient(p));
+    const completed = payoutsWithDetails.filter(p => isCompleted(p));
+    const totalUnassignedAmount = unassigned.reduce((sum, p) => sum + Number(p.payoutAmount || p.amount || 0), 0);
+    const totalPendingAmount = pending.reduce((sum, p) => sum + Number(p.payoutAmount || p.amount || 0), 0);
     const totalCompletedAmount = completed.reduce((sum, p) => sum + Number(p.payoutAmount || p.amount || 0), 0);
+    const STATUS_TABS = [
+        { key: 'all', label: 'All', count: payoutsWithDetails.length },
+        { key: 'unassigned', label: 'Unassigned', count: unassigned.length },
+        { key: 'pending', label: 'In Progress', count: pending.length },
+        { key: 'completed', label: 'Completed', count: completed.length },
+    ];
+    const filteredPayouts = statusFilter === 'unassigned' ? unassigned
+        : statusFilter === 'pending' ? pending
+        : statusFilter === 'completed' ? completed
+        : payoutsWithDetails;
     const openAssign = (payout) => {
         setAssigningPayout(payout);
         setSelectedRecipient(payout.memberId || payout.recipientId || '');
@@ -46,16 +60,16 @@ export function PayoutSchedule() {
         setSelectedRecipient('');
     };
     const renderFooter = (payout) => {
-        if (!isOpenPayout(payout) || !canManage)
+        if (isCompleted(payout) || !canManage)
             return null;
-        if (!payout.memberId && !payout.recipientId) {
-            return (<button type="button" onClick={() => openAssign(payout)} className="w-full bg-accent text-foreground py-3.5 rounded-2xl text-xs font-bold uppercase tracking-wide hover:bg-accent active:scale-95 transition-all mt-4 flex items-center justify-center gap-2">
+        if (!hasRecipient(payout)) {
+            return (<button type="button" onClick={() => openAssign(payout)} className="w-full bg-accent text-foreground py-3.5 rounded-2xl app-action uppercase hover:bg-accent active:scale-95 transition-all mt-4 flex items-center justify-center gap-2">
           <Users className="w-4 h-4"/>
           Assign Recipient
         </button>);
         }
         return (<div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-        <button type="button" onClick={() => openAssign(payout)} className="w-full bg-accent text-foreground py-3.5 rounded-2xl text-xs font-bold uppercase tracking-wide hover:bg-accent active:scale-95 transition-all">
+        <button type="button" onClick={() => openAssign(payout)} className="w-full bg-accent text-foreground py-3.5 rounded-2xl app-action uppercase hover:bg-accent active:scale-95 transition-all">
           Change Recipient
         </button>
         <button type="button" onClick={() => {
@@ -64,79 +78,186 @@ export function PayoutSchedule() {
                     toast.error(result.message || 'Could not complete payout');
                 else
                     toast.success(`Payout to ${payout.memberName} marked completed`);
-            }} className="w-full bg-primary text-foreground py-3.5 rounded-2xl text-xs font-bold uppercase tracking-wide shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all">
+            }} className="w-full bg-primary text-primary-foreground py-3.5 rounded-2xl app-action uppercase active:scale-95 transition-all">
           Mark Completed
         </button>
       </div>);
     };
-    return (<div className="pb-32 page-enter">
-      <div className="px-6 md:px-10 pt-10 pb-8">
-        <div className="flex items-start justify-between mb-10">
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-xl bg-primary/20 flex items-center justify-center">
-                <Calendar className="w-4 h-4 text-primary"/>
-              </div>
-              <p className="eyebrow text-muted-foreground/50">Payout Timeline</p>
-            </div>
-            <h1 className="text-4xl font-bold text-foreground tracking-tight leading-none mb-2">Payouts</h1>
-            <p className="text-muted-foreground text-sm font-medium">Scheduled disbursement of group savings pools.</p>
+    return (<div className="pb-28 page-enter">
+      <div className="px-4 sm:px-6 pt-5 sm:pt-6 pb-4">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="min-w-0">
+            <h1 className="app-title text-foreground">Payouts</h1>
+            <p className="app-caption text-muted-foreground mt-1 truncate">Scheduled group disbursements</p>
           </div>
-          <button type="button" onClick={() => setView(v => (v === 'list' ? 'calendar' : 'list'))} className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-border border border-border text-xs font-bold uppercase tracking-widest text-foreground/70 hover:bg-accent hover:text-foreground transition-all shadow-xl">
+          <button type="button" onClick={() => setView(v => (v === 'list' ? 'calendar' : 'list'))} className="h-10 px-3.5 rounded-xl bg-card/70 border border-border app-control text-foreground/75 hover:text-foreground transition-colors flex items-center gap-2 flex-shrink-0">
             {view === 'list' ? <CalendarDays className="w-4 h-4"/> : <List className="w-4 h-4"/>}
             {view === 'list' ? 'Calendar' : 'List'}
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-5 mb-10">
-          <div className="glass-card p-6 rounded-[2.5rem] border border-border relative overflow-hidden group">
-            <div className="absolute -right-8 -top-8 w-28 h-28 bg-primary/10 blur-3xl rounded-full"/>
+        <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-border bg-card/70 mb-4">
+          <div className="min-w-0 px-2.5 py-2 border-r border-border">
             <div className="relative z-10">
-              <Clock className="w-8 h-8 text-primary mb-4"/>
-              <p className="text-xs text-muted-foreground/40 uppercase font-bold tracking-widest mb-1.5">Scheduled</p>
-              <p className="text-3xl font-bold text-foreground tracking-tighter stat-value leading-none mb-2">{scheduled.length}</p>
-              <p className="text-xs text-primary/60 font-bold uppercase tracking-widest">{fmt(totalScheduledAmount)}</p>
+              <p className="app-value text-warning">{unassigned.length}</p>
+              <p className="app-caption text-muted-foreground mt-1.5 truncate">Unassigned</p>
+              <p className="app-caption text-warning/80 font-semibold mt-1 truncate">{fmt(totalUnassignedAmount)}</p>
             </div>
           </div>
-          <div className="glass-card p-6 rounded-[2.5rem] border border-border relative overflow-hidden group">
-            <div className="absolute -right-8 -top-8 w-28 h-28 bg-success/10 blur-3xl rounded-full"/>
+          <div className="min-w-0 px-2.5 py-2 border-r border-border">
             <div className="relative z-10">
-              <CheckCircle2 className="w-8 h-8 text-success mb-4"/>
-              <p className="text-xs text-muted-foreground/40 uppercase font-bold tracking-widest mb-1.5">Disbursed</p>
-              <p className="text-3xl font-bold text-foreground tracking-tighter stat-value leading-none mb-2">{completed.length}</p>
-              <p className="text-xs text-success/60 font-bold uppercase tracking-widest">{fmt(totalCompletedAmount)}</p>
+              <p className="app-value text-primary">{pending.length}</p>
+              <p className="app-caption text-muted-foreground mt-1.5 truncate">In progress</p>
+              <p className="app-caption text-primary/80 font-semibold mt-1 truncate">{fmt(totalPendingAmount)}</p>
+            </div>
+          </div>
+          <div className="min-w-0 px-2.5 py-2">
+            <div className="relative z-10">
+              <p className="app-value text-success">{completed.length}</p>
+              <p className="app-caption text-muted-foreground mt-1.5 truncate">Disbursed</p>
+              <p className="app-caption text-success/80 font-semibold mt-1 truncate">{fmt(totalCompletedAmount)}</p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="px-6 md:px-10">
-        {!appReady && payoutsWithDetails.length === 0 ? (<SkeletonList count={3}/>) : payoutsWithDetails.length === 0 ? (<div className="glass-card rounded-[2.5rem] border border-dashed border-border p-20 text-center">
-            <div className="w-20 h-20 rounded-3xl bg-primary/10 flex items-center justify-center mx-auto mb-6 text-primary/40">
+      <div className="px-4 sm:px-6">
+        {view === 'list' && payoutsWithDetails.length > 0 && (
+          <div className="flex gap-1.5 overflow-x-auto mb-3 pb-1 no-scrollbar">
+            {STATUS_TABS.map(tab => (
+              <button key={tab.key} type="button" onClick={() => setStatusFilter(tab.key)}
+                className={cn('flex items-center gap-1 px-2 py-1.5 rounded-md app-tab whitespace-nowrap transition-colors flex-shrink-0',
+                  statusFilter === tab.key
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-card border border-border text-muted-foreground hover:text-foreground')}>
+                {tab.label}
+                <span className={cn('w-4 h-4 rounded-full flex items-center justify-center app-caption',
+                  statusFilter === tab.key ? 'bg-white/20 text-white' : 'bg-muted text-muted-foreground')}>
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        {!appReady && payoutsWithDetails.length === 0 ? (<SkeletonList count={3}/>) : payoutsWithDetails.length === 0 ? (<div className="rounded-xl border border-dashed border-border p-12 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-5 text-primary/40">
               <Calendar className="w-10 h-10"/>
             </div>
             <h3 className="text-xl font-bold text-foreground">No Payouts Yet</h3>
-            <p className="text-muted-foreground/40 text-sm font-medium mt-2">Payouts will appear here when groups complete their rounds.</p>
-          </div>) : view === 'calendar' ? (<CalendarView payouts={payoutsWithDetails}/>) : (<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {payoutsWithDetails.map((payout) => (<PayoutCard key={payout.id} memberName={payout.memberName} groupName={payout.groupName} payoutAmount={Number(payout.payoutAmount || payout.amount || 0)} scheduledDate={payout.scheduledDate} paidAt={payout.paidAt} status={payout.status} round={payout.round || 0} totalRounds={payout.totalRounds} footer={renderFooter(payout)}/>))}
-          </div>)}
+            <p className="text-muted-foreground text-sm font-medium mt-2">Payouts will appear here when groups complete their rounds.</p>
+          </div>) : view === 'calendar' ? (<CalendarView payouts={payoutsWithDetails}/>) : filteredPayouts.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground text-sm">
+              No {statusFilter === 'unassigned' ? 'unassigned' : statusFilter === 'pending' ? 'in-progress' : statusFilter === 'completed' ? 'completed' : ''} payouts.
+            </div>
+          ) : (
+            <>
+              {/* ── Mobile list view ── */}
+              <div className="lg:hidden bg-card rounded-lg border border-border overflow-hidden">
+                <div className="divide-y divide-border">
+                  {filteredPayouts.map((payout) => {
+                    const done = isCompleted(payout);
+                    const assigned = hasRecipient(payout);
+                    const initials = payout.memberName
+                      ? payout.memberName.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
+                      : '?';
+                    const statusCfg = done
+                      ? { label: 'Done', cls: 'bg-success/10 text-success' }
+                      : assigned
+                      ? { label: 'In Progress', cls: 'bg-primary/10 text-primary' }
+                      : { label: 'Unassigned', cls: 'bg-warning/10 text-warning' };
+
+                    return (
+                      <div key={payout.id} className="px-3 py-2.5">
+                        <div className="flex items-center gap-2.5">
+                          {/* Avatar */}
+                          <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center app-value text-white flex-shrink-0',
+                            done ? 'bg-success' : assigned ? 'bg-primary' : 'bg-warning')}>
+                            {initials}
+                          </div>
+
+                          {/* Name + group + round */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="app-row-title text-foreground truncate">{payout.memberName}</p>
+                              <p className="app-row-title text-foreground tabular-nums flex-shrink-0">{fmt(Number(payout.payoutAmount || payout.amount || 0))}</p>
+                            </div>
+                            <div className="flex items-center justify-between gap-2 mt-0.5">
+                              <p className="app-row-meta text-muted-foreground truncate">{payout.groupName} · Round {payout.round || 0}/{payout.totalRounds}</p>
+                              <span className={cn('app-badge px-1.5 py-0.5 rounded flex-shrink-0', statusCfg.cls)}>
+                                {statusCfg.label}
+                              </span>
+                            </div>
+                            {(payout.scheduledDate || payout.paidAt) && (
+                              <p className="app-caption text-muted-foreground mt-0.5">
+                                {done ? `Paid ${payout.paidAt ? new Date(payout.paidAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}` : payout.scheduledDate}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Inline action buttons for managers */}
+                        {!done && canManage && (
+                          <div className="flex gap-1.5 mt-2 ml-10" onClick={e => e.stopPropagation()}>
+                            {!assigned ? (
+                              <button type="button" onClick={() => openAssign(payout)}
+                                className="flex-1 py-1 rounded-lg bg-muted text-foreground app-action flex items-center justify-center gap-1">
+                                <Users className="w-3 h-3"/>
+                                Assign
+                              </button>
+                            ) : (
+                              <>
+                                <button type="button" onClick={() => openAssign(payout)}
+                                  className="flex-1 py-1 rounded-lg bg-muted text-muted-foreground app-action">
+                                  Change
+                                </button>
+                                <button type="button"
+                                  onClick={() => {
+                                    const result = completePayout(payout.id);
+                                    if (result?.ok === false) toast.error(result.message || 'Could not complete payout');
+                                    else toast.success(`Payout to ${payout.memberName} marked completed`);
+                                  }}
+                                  className="flex-[1.5] py-1 rounded-lg bg-primary text-primary-foreground app-action">
+                                  Mark Done
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ── Desktop card grid ── */}
+              <div className="hidden lg:grid grid-cols-2 gap-6">
+                {filteredPayouts.map((payout) => (
+                  <PayoutCard key={payout.id} memberName={payout.memberName} groupName={payout.groupName}
+                    payoutAmount={Number(payout.payoutAmount || payout.amount || 0)}
+                    scheduledDate={payout.scheduledDate} paidAt={payout.paidAt}
+                    status={payout.status} round={payout.round || 0} totalRounds={payout.totalRounds}
+                    footer={renderFooter(payout)}/>
+                ))}
+              </div>
+            </>
+          )}
       </div>
 
       {assigningPayout && (<div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setAssigningPayout(null)}>
-          <div className="w-full sm:max-w-md bg-card border border-border rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <div className="w-full sm:max-w-md bg-card border border-border rounded-t-3xl sm:rounded-3xl p-6" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center gap-3 mb-5">
               <div className="w-11 h-11 rounded-2xl bg-primary/15 text-primary flex items-center justify-center">
                 <Users className="w-5 h-5"/>
               </div>
               <div>
                 <h2 className="text-lg font-bold text-foreground">Assign Recipient</h2>
-                <p className="text-xs text-muted-foreground/60 font-medium">
+                <p className="text-xs text-muted-foreground font-medium">
                   {assigningPayout.groupName} · Round {assigningPayout.round}
                 </p>
               </div>
             </div>
 
-            <label className="block text-xs uppercase tracking-wide font-bold text-muted-foreground/50 mb-2">
+            <label className="block text-xs uppercase tracking-wide font-bold text-muted-foreground mb-2">
               Member
             </label>
             <select value={selectedRecipient} onChange={(event) => setSelectedRecipient(event.target.value)} className="w-full rounded-2xl bg-background border border-border px-4 py-3 text-sm text-foreground outline-none focus:border-primary">
@@ -180,14 +301,14 @@ function CalendarView({ payouts }) {
     };
     const sortedKeys = Array.from(buckets.keys()).sort();
     if (sortedKeys.length === 0) {
-        return (<div className="glass-card rounded-[2.5rem] border border-dashed border-border p-16 text-center text-muted-foreground/40 text-sm font-medium">
+        return (<div className="glass-card rounded-[2.5rem] border border-dashed border-border p-16 text-center text-muted-foreground text-sm font-medium">
         No scheduled dates to display in calendar.
       </div>);
     }
     return (<div className="space-y-12">
       {sortedKeys.map(key => (<div key={key}>
           <div className="flex items-center gap-4 mb-6">
-            <p className="eyebrow text-muted-foreground/50 whitespace-nowrap">
+            <p className="eyebrow text-muted-foreground whitespace-nowrap">
               {monthLabel(key)}
             </p>
             <div className="h-px w-full bg-border"/>
@@ -199,7 +320,7 @@ function CalendarView({ payouts }) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-foreground font-bold truncate text-sm">{p.memberName}</p>
-                  <p className="text-xs text-muted-foreground/40 uppercase font-bold tracking-widest mt-0.5 truncate">{p.groupName} · Round {p.round}</p>
+                  <p className="text-xs text-muted-foreground uppercase font-bold tracking-widest mt-0.5 truncate">{p.groupName} · Round {p.round}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-foreground font-bold text-sm tabular-nums">{p.scheduledDate}</p>

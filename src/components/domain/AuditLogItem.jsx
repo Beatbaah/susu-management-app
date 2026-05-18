@@ -1,4 +1,4 @@
-import { Shield, DollarSign, User, AlertCircle, Settings as SettingsIcon } from 'lucide-react';
+import { Shield, Wallet, User, AlertCircle, Settings as SettingsIcon } from 'lucide-react';
 const SEVERITY_COLORS = {
     critical: 'bg-destructive/20 text-destructive border-destructive/50',
     warning: 'bg-primary/20 text-primary border-primary/50',
@@ -8,7 +8,7 @@ function pickIcon(category) {
     switch (category) {
         case 'payment':
         case 'payout':
-            return DollarSign;
+            return Wallet;
         case 'user':
         case 'group':
             return User;

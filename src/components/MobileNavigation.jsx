@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { LayoutGrid, Users, Users2, DollarSign, MessageCircle, Trophy, User, Plus, Bell, } from 'lucide-react';
+import { LayoutGrid, Users, Users2, Wallet, MessageCircle, Trophy, User, Plus, Bell, } from 'lucide-react';
 import { cn } from './ui/utils';
 import { canAccessPage } from '../security/permissions';
 import { useAppContext } from '../context/AppContext';
@@ -12,7 +12,7 @@ const MEMBER_NAV = [
 ];
 const STAFF_NAV = [
     { id: 'dashboard', icon: LayoutGrid, label: 'Home' },
-    { id: 'payments', icon: DollarSign, label: 'Pay' },
+    { id: 'payments', icon: Wallet, label: 'Pay' },
     { id: 'members', icon: Users, label: 'Members' },
     { id: 'reminders', icon: Bell, label: 'Alerts' },
 ];
@@ -41,7 +41,7 @@ export function MobileNavigation({ activePage, onNavigate, onPrimaryAction, clas
           <Icon className={cn('w-[18px] h-[18px]')} strokeWidth={active ? 2.25 : 1.75}/>
         </div>
 
-        <span className={cn('text-xs font-medium leading-none', 'transition-colors duration-150', active ? 'text-primary font-semibold' : 'text-foreground/40')}>
+        <span className={cn('app-control', 'transition-colors duration-150', active ? 'text-primary font-semibold' : 'text-foreground/40')}>
           {item.label}
         </span>
       </button>);
@@ -53,7 +53,7 @@ export function MobileNavigation({ activePage, onNavigate, onPrimaryAction, clas
 
         {/* Centre FAB */}
         <div className="w-16 flex-shrink-0 flex items-center justify-center -mt-5 relative">
-          {onPrimaryAction && (<button type="button" onClick={onPrimaryAction} aria-label="Quick action" className={cn('w-12 h-12 rounded-full', 'bg-primary text-primary-foreground', 'flex items-center justify-center', 'border-2 border-card', 'shadow-md', 'transition-all duration-150 active:scale-90 hover:brightness-105', 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-card')}>
+          {onPrimaryAction && (<button type="button" onClick={onPrimaryAction} aria-label="Quick action" className={cn('w-12 h-12 rounded-full', 'bg-primary text-primary-foreground', 'flex items-center justify-center', 'border-2 border-card', 'transition-all duration-150 active:scale-90 hover:brightness-105', 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-card')}>
               <Plus className="w-5 h-5" strokeWidth={2.25}/>
             </button>)}
         </div>

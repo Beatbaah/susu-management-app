@@ -59,6 +59,15 @@ export async function signIn(email, password) {
             const uid = credential.user.uid;
             const displayName = credential.user.displayName || normalizedEmail.split('@')[0];
 
+            // Infer role from email prefix so fallback matches the account intent
+            const inferRoleFromEmail = (email) => {
+                const prefix = email.split('@')[0].toLowerCase();
+                if (prefix.includes('admin')) return 'admin';
+                if (prefix.includes('manager')) return 'manager';
+                if (prefix.includes('collector')) return 'collector';
+                return 'member';
+            };
+
             // Minimal profile built purely from Firebase Auth — always works
             const fallbackProfile = {
                 id: uid,
@@ -66,7 +75,7 @@ export async function signIn(email, password) {
                 email: normalizedEmail,
                 name: displayName,
                 fullName: displayName,
-                role: 'admin',
+                role: inferRoleFromEmail(normalizedEmail),
                 status: 'approved',
                 color: '#5b8def',
                 streak: 0,
@@ -89,7 +98,17 @@ export async function signIn(email, password) {
                         )),
                     ]);
                     if (snap.exists()) {
-                        profileData = { ...snap.data(), id: uid };
+                        const stored = { ...snap.data(), id: uid };
+                        // If the stored role is 'admin' but the email clearly indicates
+                        // a different role, the initial login wrote the wrong fallback —
+                        // correct it so the profile reflects the intended role.
+                        const inferred = inferRoleFromEmail(normalizedEmail);
+                        if (stored.role === 'admin' && inferred !== 'admin') {
+                            stored.role = inferred;
+                            setDoc(doc(db, 'users', uid), { role: inferred }, { merge: true })
+                                .catch(e => console.warn('[authService] role correction failed:', e?.code));
+                        }
+                        profileData = stored;
                     } else {
                         // Write profile to Firestore in the background — don't await
                         setDoc(doc(db, 'users', uid), fallbackProfile, { merge: true })

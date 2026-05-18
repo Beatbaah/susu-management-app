@@ -1,7 +1,7 @@
-import { X, DollarSign, UserPlus, Users2, Bell } from 'lucide-react';
+import { X, Wallet, UserPlus, Users2, Bell } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 const ACTIONS = [
-    { id: 'payments', label: 'Record payment', description: 'Capture a new member contribution', icon: DollarSign, tone: 'text-success' },
+    { id: 'payments', label: 'Record payment', description: 'Capture a new member contribution', icon: Wallet, tone: 'text-success' },
     { id: 'members', label: 'Add member', description: 'Register a new susu participant', icon: UserPlus, tone: 'text-primary' },
     { id: 'groups', label: 'Create group', description: 'Start a new susu rotation', icon: Users2, tone: 'text-yellow-500' },
     { id: 'reminders', label: 'Send reminder', description: 'Nudge members about payments', icon: Bell, tone: 'text-purple-500' },

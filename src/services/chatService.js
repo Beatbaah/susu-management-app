@@ -19,7 +19,7 @@ export function listMessages(groupId) {
     const group = findGroup(groupId);
     return Array.isArray(group?.chat) ? group.chat : [];
 }
-export function postMessage(groupId, actor, message) {
+export function postMessage(groupId, actor, message, type = 'message') {
     const text = sanitize((message || '').trim());
     if (!text)
         return null;
@@ -33,6 +33,7 @@ export function postMessage(groupId, actor, message) {
         senderRole: actor?.role || 'member',
         msg: text,
         time: new Date().toISOString(),
+        type,
     };
     const next = [...(Array.isArray(group.chat) ? group.chat : []), entry];
     updateGroup(groupId, { chat: next });
@@ -46,4 +47,23 @@ export function postMessage(groupId, actor, message) {
         }
     }
     return entry;
+}
+export function postAnnouncement(groupId, actor, message) {
+    return postMessage(groupId, actor, message, 'announcement');
+}
+export function addReaction(groupId, messageId, emoji, userId) {
+    const group = findGroup(groupId);
+    if (!group) return null;
+    const chat = Array.isArray(group.chat) ? group.chat : [];
+    const next = chat.map(m => {
+        if (m.id !== messageId) return m;
+        const reactions = { ...(m.reactions || {}) };
+        const users = reactions[emoji] ? [...reactions[emoji]] : [];
+        const idx = users.indexOf(userId);
+        if (idx >= 0) users.splice(idx, 1); else users.push(userId); // toggle
+        if (users.length === 0) delete reactions[emoji]; else reactions[emoji] = users;
+        return { ...m, reactions };
+    });
+    updateGroup(groupId, { chat: next });
+    return next;
 }

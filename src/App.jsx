@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useEffect, useRef, useState } from "react";
 import "./styles/App.css";
 import { ShieldAlert } from "lucide-react";
 // Components
@@ -27,10 +27,11 @@ import { Profile } from "./pages/Profile";
 import AuthScreen from "./pages/AuthScreen";
 import { BioScreen } from "./pages/BioScreen";
 import { signOut as signOutUser } from "./services/authService";
+import { mobileNavHidden } from "./services/uiBus";
 // Context
 import { useAppContext } from "./context/AppContext";
 export default function App() {
-    const { authUser, setAuthUser, users, payments, groups, reminders, settings, registerMember, logAudit } = useAppContext();
+    const { authUser, setAuthUser, users, payments, groups, reminders, settings, dismissedNotifications, registerMember, logAudit } = useAppContext();
     const [page, setPage] = useState("dashboard");
     const [showBio, setShowBio] = useState(false);
     const [payOpen, setPayOpen] = useState(false);
@@ -57,6 +58,7 @@ export default function App() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [globalSearch, setGlobalSearch] = useState("");
     const [isOffline, setIsOffline] = useState(typeof navigator !== "undefined" ? !navigator.onLine : false);
+    const lastMainScrollY = useRef(0);
     // Decide which page best answers a global search query.
     const resolveGlobalSearchPage = (q) => {
         const term = q.trim().toLowerCase();
@@ -94,15 +96,30 @@ export default function App() {
         {showBio ? (<BioScreen onSuccess={(u) => { setAuthUser(u); setShowBio(false); }} onFallback={() => setShowBio(false)}/>) : (<AuthScreen onLogin={(u) => setAuthUser(u)} onBio={() => setShowBio(true)} onRegister={handleRegister} registrationGroups={groups}/>)}
       </Suspense>);
     }
-    const pendingRegistrations = users.filter(user => user.role === "member" && user.status === "pending").length;
+    const pendingRegistrations = users.filter(user => user.role === "member" && user.status === "pending" && !dismissedNotifications.members.includes(user.id)).length;
     const pendingPayments = settings.notifPaymentReminders
-        ? payments.filter(payment => payment.status === "pending").length
+        ? payments.filter(payment => payment.status === "pending" && !dismissedNotifications.payments.includes(payment.id)).length
         : 0;
     const unreadReminders = reminders.filter(reminder => reminder.read === false && (!reminder.userId || reminder.userId === authUser.id)).length;
     const notificationCount = pendingRegistrations + pendingPayments + unreadReminders;
     const handleNotificationsClick = () => setNotificationsOpen(true);
     // Members see a personalized "My Account" home instead of the staff dashboard.
     const effectivePage = (authUser?.role === 'member' && page === 'dashboard') ? 'portal' : page;
+    useEffect(() => {
+        lastMainScrollY.current = 0;
+        mobileNavHidden.set(false);
+    }, [effectivePage]);
+    const handleMainScroll = (event) => {
+        const y = event.currentTarget.scrollTop;
+        const delta = y - lastMainScrollY.current;
+        if (Math.abs(delta) < 12)
+            return;
+        if (y < 24 || delta < 0)
+            mobileNavHidden.set(false);
+        else if (delta > 0 && y > 80)
+            mobileNavHidden.set(true);
+        lastMainScrollY.current = y;
+    };
     const renderPage = () => {
         const inner = (() => {
             switch (effectivePage) {
@@ -133,7 +150,7 @@ export default function App() {
         setPage("dashboard");
         setSidebarOpen(false);
     };
-    return (<div className="flex h-screen w-full bg-background overflow-hidden">
+    return (<div className="flex h-[100dvh] w-full bg-background overflow-hidden">
         <Sidebar activePage={effectivePage} onNavigate={(p) => setPage(p)} user={authUser} onLogout={handleLogout} className="hidden md:flex"/>
 
         {sidebarOpen && (<div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-md md:hidden" onClick={() => setSidebarOpen(false)}/>)}
@@ -154,7 +171,7 @@ export default function App() {
                 setPage(target);
         }} searchValue={globalSearch} searchPlaceholder="Search members, payments, groups…"/>
 
-          <main className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth">
+          <main className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth" onScroll={handleMainScroll}>
               {isOffline && (<div role="status" aria-live="polite" className="bg-destructive/10 text-destructive px-6 md:px-10 py-3 text-xs font-semibold flex items-center gap-2 border-b border-destructive/20 uppercase tracking-wide">
                   <ShieldAlert className="w-4 h-4 flex-shrink-0" aria-hidden="true"/>
                   <span>No internet connection — working offline</span>

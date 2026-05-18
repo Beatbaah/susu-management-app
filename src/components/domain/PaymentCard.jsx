@@ -21,7 +21,7 @@ export function PaymentCard({ memberName, groupName, amount, status, daysOverdue
           </div>
           <div className="min-w-0">
             <h4 className="text-sm sm:text-base font-semibold text-foreground truncate group-hover:text-primary transition-colors">{memberName}</h4>
-            <p className="eyebrow text-muted-foreground/50 mt-1">{groupName}</p>
+            <p className="eyebrow text-muted-foreground mt-1">{groupName}</p>
             <div className="flex items-center gap-2 mt-2">
               <div className={cn("px-2.5 py-1 rounded-lg eyebrow flex items-center gap-1.5", isPaid ? "bg-success/15 text-success" :
             isPending ? "bg-primary/15 text-primary" :
@@ -43,7 +43,7 @@ export function PaymentCard({ memberName, groupName, amount, status, daysOverdue
 
       <div className="grid grid-cols-2 gap-x-3 gap-y-3 pt-4 border-t border-border relative z-10">
         <div className="space-y-1">
-          <p className="eyebrow text-muted-foreground/50 flex items-center gap-1.5">
+          <p className="eyebrow text-muted-foreground flex items-center gap-1.5">
             <Calendar className="w-3 h-3 text-primary/50"/>
             Timeline
           </p>
@@ -53,7 +53,7 @@ export function PaymentCard({ memberName, groupName, amount, status, daysOverdue
         </div>
 
         {method && (<div className="space-y-1">
-            <p className="eyebrow text-muted-foreground/50 flex items-center gap-1.5">
+            <p className="eyebrow text-muted-foreground flex items-center gap-1.5">
               <CreditCard className="w-3 h-3 text-success/50"/>
               Source
             </p>
@@ -61,7 +61,7 @@ export function PaymentCard({ memberName, groupName, amount, status, daysOverdue
           </div>)}
 
         {reference && (<div className="col-span-2 space-y-1">
-            <p className="eyebrow text-muted-foreground/50 flex items-center gap-1.5">
+            <p className="eyebrow text-muted-foreground flex items-center gap-1.5">
               <Hash className="w-3 h-3 text-warning/50"/>
               Reference Key
             </p>

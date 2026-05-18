@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { toast } from '../../utils/toast';
-import { X, Bell, UserPlus, Clock, AlertCircle, CheckCircle2, } from 'lucide-react';
+import { X, Bell, UserPlus, Clock, AlertCircle, CheckCircle2, Trash2, } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 import { fmt } from '../../utils/helpers';
 const toneClasses = {
@@ -30,7 +30,11 @@ const formatRelative = (iso) => {
     return d.toLocaleDateString();
 };
 export function NotificationsPanel({ onClose, onNavigate }) {
-    const { authUser, reminders, users, payments, settings, markReminderRead, markAllRemindersRead } = useAppContext();
+    const { authUser, reminders, users, payments, settings, markReminderRead, markAllRemindersRead, deleteReminder, clearReminders, dismissMemberNotification, dismissPaymentNotification, clearAllNotifications, } = useAppContext();
+    // Auto-mark all reminders as read when the panel opens
+    useEffect(() => {
+        if (reminders.some(r => !r.read)) markAllRemindersRead();
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
     const isStaff = authUser && ['admin', 'manager'].includes(authUser.role);
     const isCollector = authUser?.role === 'collector';
     // Classify a reminder by its title / body keywords so we can respect the
@@ -76,6 +80,7 @@ export function NotificationsPanel({ onClose, onNavigate }) {
                 time: r.sent || r.date || '',
                 read: !!r.read,
                 tone: r.type === 'warning' ? 'warning' : r.type === 'success' ? 'success' : 'info',
+                deleteId: r.id,
                 onSelect: () => {
                     if (r.id)
                         markReminderRead(r.id);
@@ -95,12 +100,13 @@ export function NotificationsPanel({ onClose, onNavigate }) {
                     title: 'New member request',
                     body: `${u.fullName || u.name} is awaiting approval.`,
                     time: u.createdAt || u.joinedAt || '',
-                    read: false,
+                    read: true,
                     tone: 'info',
                     onSelect: () => {
                         onNavigate('members');
                         onClose();
                     },
+                    dismissAction: () => dismissMemberNotification(u.id),
                 });
             });
         }
@@ -116,12 +122,13 @@ export function NotificationsPanel({ onClose, onNavigate }) {
                     title: 'Payment needs confirmation',
                     body: `${member?.fullName || member?.name || 'Member'} submitted ${fmt(p.amount || 0)}`,
                     time: p.paymentDate || p.date || '',
-                    read: false,
+                    read: true,
                     tone: 'warning',
                     onSelect: () => {
                         onNavigate('payments');
                         onClose();
                     },
+                    dismissAction: () => dismissPaymentNotification(p.id),
                 });
             });
         }
@@ -130,9 +137,10 @@ export function NotificationsPanel({ onClose, onNavigate }) {
             const tb = b.time ? new Date(b.time).getTime() : 0;
             return tb - ta;
         });
-    }, [reminders, users, payments, authUser, isStaff, isCollector, settings, markReminderRead, onNavigate, onClose]);
+    }, [reminders, users, payments, authUser, isStaff, isCollector, settings, markReminderRead, dismissMemberNotification, dismissPaymentNotification, onNavigate, onClose]);
     const unreadCount = items.filter(i => !i.read).length;
     const hasReminderUnread = reminders.some(r => !r.read);
+    const hasReminders = reminders.length > 0;
     return (<div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-start sm:justify-end p-0 sm:p-4" onClick={onClose}>
       <div className="bg-card border border-border w-full sm:max-w-sm sm:rounded-3xl rounded-t-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b border-border flex-shrink-0">
@@ -168,31 +176,45 @@ export function NotificationsPanel({ onClose, onNavigate }) {
                     item.source === 'pending-payment' ? Clock :
                         item.tone === 'warning' ? AlertCircle :
                             Bell;
-                return (<button key={item.id} type="button" onClick={item.onSelect} className={`w-full text-left px-4 py-3 hover:bg-muted/20 transition-colors ${item.read ? '' : 'bg-primary/[0.03]'}`}>
+                return (<div key={item.id} className={`w-full px-4 py-3 hover:bg-muted/20 transition-colors rounded-2xl ${item.read ? '' : 'bg-primary/[0.03]'}`}>
                     <div className="flex items-start gap-3">
                       <div className={`w-9 h-9 rounded-xl ${tone.bg} ${tone.icon} flex items-center justify-center flex-shrink-0`}>
                         <SourceIcon className="w-4 h-4"/>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <p className="text-foreground font-bold text-sm truncate flex-1">{item.title}</p>
-                          {!item.read && <span className={`w-1.5 h-1.5 rounded-full ${tone.dot} flex-shrink-0`}/>}
-                        </div>
-                        <p className="text-muted-foreground text-xs mb-1 line-clamp-2">{item.body}</p>
-                        <p className="text-muted-foreground/70 text-xs uppercase tracking-wider font-bold">
-                          {formatRelative(item.time)}
-                        </p>
+                        <button type="button" onClick={item.onSelect} className="w-full text-left">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <p className="text-foreground font-bold text-sm truncate flex-1">{item.title}</p>
+                            {!item.read && <span className={`w-1.5 h-1.5 rounded-full ${tone.dot} flex-shrink-0`}/>}
+                          </div>
+                          <p className="text-muted-foreground text-xs mb-1 line-clamp-2">{item.body}</p>
+                          <p className="text-muted-foreground text-xs uppercase tracking-wider font-bold">
+                            {formatRelative(item.time)}
+                          </p>
+                        </button>
                       </div>
+                      {item.dismissAction && (<button type="button" onClick={(e) => {
+                                    e.stopPropagation();
+                                    item.dismissAction();
+                                    toast.success('Notification removed');
+                                }} className="w-9 h-9 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/80 flex items-center justify-center transition-colors" aria-label="Dismiss notification">
+                        <Trash2 className="w-4 h-4"/>
+                      </button>)}
                     </div>
-                  </button>);
+                  </div>);
             })}
             </div>)}
         </div>
 
-        {hasReminderUnread && (<div className="border-t border-border p-3 flex-shrink-0">
-            <button type="button" onClick={() => { markAllRemindersRead(); toast.success('All reminders marked read'); }} className="w-full text-center text-primary text-xs font-bold py-2 rounded-xl hover:bg-primary/10 transition-colors">
-              Mark all reminders as read
-            </button>
+        {(hasReminderUnread || items.length > 0) && (<div className="border-t border-border p-3 flex-shrink-0">
+            <div className="grid gap-2">
+              {hasReminderUnread && (<button type="button" onClick={() => { markAllRemindersRead(); toast.success('All reminders marked read'); }} className="w-full text-center text-primary text-xs font-bold py-2 rounded-xl hover:bg-primary/10 transition-colors">
+                  Mark all reminders as read
+                </button>)}
+              {items.length > 0 && (<button type="button" onClick={() => { clearAllNotifications(); toast.success('All notifications cleared'); }} className="w-full text-center text-foreground text-xs font-bold py-2 rounded-xl border border-border hover:bg-muted/10 transition-colors">
+                  Clear all notifications
+                </button>)}
+            </div>
           </div>)}
       </div>
     </div>);
