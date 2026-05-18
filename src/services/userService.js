@@ -41,18 +41,21 @@ export function createUser(input) {
     void upsertDoc('users', newUser);
     return newUser;
 }
-export function updateUser(userId, patch) {
+export function updateUser(userId, patch, currentData = null) {
     const all = listUsers();
     let next = null;
-    const updated = all.map(u => {
-        if (u.id !== userId)
-            return u;
-        next = { ...u, ...patch, updatedAt: new Date().toISOString() };
-        return next;
-    });
-    if (next) {
-        replaceUsers(updated);
-        void upsertDoc('users', next);
+    if (all.length > 0) {
+        // Demo/localStorage mode: find the user in the local list
+        const updated = all.map(u => {
+            if (String(u.id) !== String(userId)) return u;
+            next = { ...u, ...patch, updatedAt: new Date().toISOString() };
+            return next;
+        });
+        if (next) replaceUsers(updated);
+    } else if (currentData) {
+        // Firestore mode: localStorage is empty; build from provided snapshot
+        next = { ...currentData, ...patch, updatedAt: new Date().toISOString() };
     }
+    if (next) void upsertDoc('users', next);
     return next;
 }

@@ -56,29 +56,29 @@ export async function registerMember(input) {
 
     return createUser(baseProfile);
 }
-export function approveMember(memberId, approvedBy) {
-    const member = listUsers().find(u => String(u.id) === String(memberId));
+export function approveMember(memberId, approvedBy, currentData = null) {
+    const member = listUsers().find(u => String(u.id) === String(memberId)) ?? currentData;
     if (!member) return null;
     if (member.status === 'approved') return member;
-    if (member.status === 'rejected') return null; // rejected members must be reinstated separately
-    return updateUser(memberId, { status: 'approved', approvedBy, approvedAt: new Date().toISOString() });
+    if (member.status === 'rejected') return null;
+    return updateUser(memberId, { status: 'approved', approvedBy, approvedAt: new Date().toISOString() }, member);
 }
-export function rejectMember(memberId, rejectedBy) {
-    const member = listUsers().find(u => String(u.id) === String(memberId));
+export function rejectMember(memberId, rejectedBy, currentData = null) {
+    const member = listUsers().find(u => String(u.id) === String(memberId)) ?? currentData;
     if (!member) return null;
     if (member.status === 'rejected') return member;
-    return updateUser(memberId, { status: 'rejected', rejectedBy, rejectedAt: new Date().toISOString() });
+    return updateUser(memberId, { status: 'rejected', rejectedBy, rejectedAt: new Date().toISOString() }, member);
 }
-export function suspendMember(memberId) {
-    const member = listUsers().find(u => String(u.id) === String(memberId));
+export function suspendMember(memberId, currentData = null) {
+    const member = listUsers().find(u => String(u.id) === String(memberId)) ?? currentData;
     if (!member || member.status === 'suspended') return member ?? null;
-    return updateUser(memberId, { status: 'suspended' });
+    return updateUser(memberId, { status: 'suspended' }, member);
 }
-export function reinstateMember(memberId, reinstatedBy) {
-    const member = listUsers().find(u => String(u.id) === String(memberId));
+export function reinstateMember(memberId, reinstatedBy, currentData = null) {
+    const member = listUsers().find(u => String(u.id) === String(memberId)) ?? currentData;
     if (!member || !['suspended', 'rejected'].includes(member.status)) return null;
-    return updateUser(memberId, { status: 'approved', reinstatedBy, reinstatedAt: new Date().toISOString() });
+    return updateUser(memberId, { status: 'approved', reinstatedBy, reinstatedAt: new Date().toISOString() }, member);
 }
-export function assignGroup(memberId, groupId) {
-    return updateUser(memberId, { groupId });
+export function assignGroup(memberId, groupId, currentData = null) {
+    return updateUser(memberId, { groupId }, currentData);
 }

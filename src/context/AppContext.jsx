@@ -229,7 +229,7 @@ export const AppProvider = ({ children }) => {
                 const idx = updatedUsers.findIndex(x => x.id === u.id);
                 if (idx !== -1 && updatedUsers[idx].status !== 'suspended') {
                     updatedUsers[idx] = { ...updatedUsers[idx], status: 'suspended' };
-                    svcSuspendMember(u.id);
+                    svcSuspendMember(u.id, u);
                     newlySuspendedIds.push(String(u.id));
                 }
             }
@@ -327,7 +327,7 @@ export const AppProvider = ({ children }) => {
     };
     const updateMember = (memberId, patch) => {
         const current = users.find(u => u.id === memberId);
-        const updated = svcUpdateUser(memberId, patch);
+        const updated = svcUpdateUser(memberId, patch, current);
         if (!updated)
             return null;
         setUsers(prev => prev.map(u => (u.id === memberId ? updated : u)));
@@ -352,7 +352,8 @@ export const AppProvider = ({ children }) => {
         return updated;
     };
     const approveUser = (userId) => {
-        const approved = svcApproveMember(userId, authUser?.id);
+        const current = users.find(u => String(u.id) === String(userId));
+        const approved = svcApproveMember(userId, authUser?.id, current);
         if (!approved)
             return null;
         setUsers(prev => prev.map(u => (String(u.id) === String(userId) ? approved : u)));
@@ -370,14 +371,16 @@ export const AppProvider = ({ children }) => {
         return approved;
     };
     const reinstateUser = (userId) => {
-        const reinstated = svcReinstateMember(userId, authUser?.id);
+        const current = users.find(u => String(u.id) === String(userId));
+        const reinstated = svcReinstateMember(userId, authUser?.id, current);
         if (!reinstated) return null;
         setUsers(prev => prev.map(u => (String(u.id) === String(userId) ? reinstated : u)));
         logAudit({ action: 'reinstate member', targetType: 'user', targetId: reinstated.id, newValue: reinstated });
         return reinstated;
     };
     const rejectUser = (userId) => {
-        const rejected = svcRejectMember(userId, authUser?.id);
+        const current = users.find(u => String(u.id) === String(userId));
+        const rejected = svcRejectMember(userId, authUser?.id, current);
         if (!rejected)
             return null;
         setUsers(prev => prev.map(u => (String(u.id) === String(userId) ? rejected : u)));
@@ -398,7 +401,8 @@ export const AppProvider = ({ children }) => {
     const assignUserToGroup = (userId, groupId) => {
         if (groupId && !listGroups().find(g => String(g.id) === String(groupId)))
             return;
-        svcAssignGroup(userId, groupId);
+        const current = users.find(u => String(u.id) === String(userId));
+        svcAssignGroup(userId, groupId, current);
         setUsers(prev => prev.map(u => (String(u.id) === String(userId) ? { ...u, groupId } : u)));
         const groupsNext = listGroups().map(g => {
             const members = Array.isArray(g.members) ? g.members : [];
