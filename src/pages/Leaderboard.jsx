@@ -17,9 +17,17 @@ export function Leaderboard() {
             });
             const totalContributed = paidPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
             const group = groups.find(g => g.id === member.groupId);
-            // Compute points from live payment history:
-            // 10 pts per paid payment, +5 bonus per on-time payment, +2 per streak day
-            const points = (paidPayments.length * 10) + (onTimePayments.length * 5) + ((member.streak || 0) * 2);
+            // Compute consecutive on-time streak from live payment history.
+            const sortedPaid = [...paidPayments].sort((a, b) =>
+                new Date(b.paymentDate || b.date || 0).getTime() - new Date(a.paymentDate || a.date || 0).getTime()
+            );
+            let streak = 0;
+            for (const p of sortedPaid) {
+                if (!p.dueDate || !p.paymentDate) { streak++; continue; }
+                if (new Date(p.paymentDate) <= new Date(p.dueDate)) streak++;
+                else break;
+            }
+            const points = (paidPayments.length * 10) + (onTimePayments.length * 5) + (streak * 2);
             return {
                 id: member.id,
                 name: member.fullName || member.name || 'Member',
@@ -27,7 +35,7 @@ export function Leaderboard() {
                 payments: paidPayments.length,
                 onTime: onTimePayments.length,
                 amount: totalContributed,
-                streak: member.streak || 0,
+                streak,
                 points,
                 badges: (member.badges || []),
                 color: member.color || '#6491DE',

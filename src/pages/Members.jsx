@@ -43,7 +43,7 @@ export function Members() {
     };
     const closeDialog = () => { setDialogOpen(false); setDialogError(null); setEditingId(null); };
     const handleSave = () => {
-        const v = validateMemberRegistration(draft);
+        const v = validateMemberRegistration(draft, users);
         if (!v.ok) {
             setDialogError(v.message || 'Invalid input.');
             return;

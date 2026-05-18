@@ -3,6 +3,7 @@ import { MOCK_PAYMENTS } from '../data/mockData';
 import { genId, genRef } from '../utils/helpers';
 import { validatePaymentRecord } from '../validation/paymentRules';
 import { findGroup } from './groupService';
+import { listUsers } from './userService';
 import { replaceCollection, upsertDoc } from './firestoreSync';
 const STORE_KEY = 'payments';
 export function listPayments() {
@@ -42,10 +43,17 @@ export function recordPayment(draft, actorRole) {
     void upsertDoc(STORE_KEY, payment);
     return { ok: true, payment };
 }
-export function confirmPayment(paymentId, confirmedBy) {
+export function confirmPayment(paymentId, confirmedBy, actorRole) {
+    if (actorRole && !['admin', 'manager'].includes(actorRole))
+        return null;
     const current = findPayment(paymentId);
     if (!current || current.status === 'paid')
         return current ?? null;
+    // Do not confirm payments for suspended or rejected members.
+    const payerId = current.userId || current.memberId;
+    const payer = payerId ? listUsers().find(u => String(u.id) === String(payerId)) : null;
+    if (payer && payer.status !== 'approved')
+        return null;
     const next = {
         ...current,
         status: 'paid',
@@ -56,7 +64,9 @@ export function confirmPayment(paymentId, confirmedBy) {
     void upsertDoc(STORE_KEY, next);
     return next;
 }
-export function rejectPayment(paymentId, rejectedBy) {
+export function rejectPayment(paymentId, rejectedBy, actorRole) {
+    if (actorRole && !['admin', 'manager'].includes(actorRole))
+        return null;
     const current = findPayment(paymentId);
     if (!current || current.status === 'rejected')
         return current ?? null;
@@ -75,8 +85,19 @@ export function rejectPayment(paymentId, rejectedBy) {
  * never silently re-written (per the financial-rule architecture). Returns
  * the updated record or a rejection.
  */
+export function reopenPayment(paymentId, reopenedBy) {
+    const current = findPayment(paymentId);
+    if (!current || current.status !== 'rejected')
+        return null;
+    const { rejectedBy: _rb, rejectedAt: _ra, ...rest } = current;
+    const next = { ...rest, status: 'pending', reopenedBy, reopenedAt: new Date().toISOString() };
+    replacePayments(listPayments().map(p => (p.id === paymentId ? next : p)));
+    void upsertDoc(STORE_KEY, next);
+    return next;
+}
 export function markOverduePayments() {
-    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const all = listPayments();
     let changed = false;
     const updated = all.map(p => {

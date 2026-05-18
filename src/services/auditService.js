@@ -9,7 +9,12 @@ export function listLogs() {
 export function appendLog(actor, event) {
     const entry = createAuditEntry({ actor, ...event });
     const existing = listLogs();
-    const next = [entry, ...existing].slice(0, MAX_LOG_ROWS);
+    const combined = [entry, ...existing];
+    if (combined.length > MAX_LOG_ROWS) {
+        const notice = createAuditEntry({ actor: null, action: `Audit log truncated — ${combined.length - MAX_LOG_ROWS + 1} oldest entries removed.`, targetType: 'system', targetId: 'auditLogs' });
+        combined.splice(MAX_LOG_ROWS - 1, combined.length, notice);
+    }
+    const next = combined;
     writeStore(STORE_KEY, next);
     // Firestore: append-only by writing the new entry. We don't sync the whole
     // collection here to avoid deleting historical audit records.

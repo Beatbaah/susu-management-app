@@ -91,6 +91,12 @@ export default function App() {
     const handleRegister = (user) => {
         return registerMember(user);
     };
+    // Members see a personalized "My Account" home instead of the staff dashboard.
+    const effectivePage = (authUser?.role === 'member' && page === 'dashboard') ? 'portal' : page;
+    useEffect(() => {
+        lastMainScrollY.current = 0;
+        mobileNavHidden.set(false);
+    }, [effectivePage]);
     if (!authUser) {
         return (<Suspense fallback={<PageFallback />}>
         {showBio ? (<BioScreen onSuccess={(u) => { setAuthUser(u); setShowBio(false); }} onFallback={() => setShowBio(false)}/>) : (<AuthScreen onLogin={(u) => setAuthUser(u)} onBio={() => setShowBio(true)} onRegister={handleRegister} registrationGroups={groups}/>)}
@@ -103,12 +109,6 @@ export default function App() {
     const unreadReminders = reminders.filter(reminder => reminder.read === false && (!reminder.userId || reminder.userId === authUser.id)).length;
     const notificationCount = pendingRegistrations + pendingPayments + unreadReminders;
     const handleNotificationsClick = () => setNotificationsOpen(true);
-    // Members see a personalized "My Account" home instead of the staff dashboard.
-    const effectivePage = (authUser?.role === 'member' && page === 'dashboard') ? 'portal' : page;
-    useEffect(() => {
-        lastMainScrollY.current = 0;
-        mobileNavHidden.set(false);
-    }, [effectivePage]);
     const handleMainScroll = (event) => {
         const y = event.currentTarget.scrollTop;
         const delta = y - lastMainScrollY.current;

@@ -182,6 +182,7 @@ export async function signOut() {
             console.warn('[authService] signOut error', error);
         }
     }
+    try { localStorage.removeItem('excellent_susu_v1_authUser'); } catch {}
     setCurrentUser(null);
 }
 

@@ -3,6 +3,7 @@ import { MOCK_GROUPS } from '../data/mockData';
 import { genId } from '../utils/helpers';
 import { replaceCollection, upsertDoc } from './firestoreSync';
 import { validateGroup } from '../validation/groupRules';
+import { listUsers } from './userService';
 const STORE_KEY = 'groups';
 export function listGroups() {
     return readStore(STORE_KEY, MOCK_GROUPS);
@@ -49,7 +50,13 @@ export function updateGroup(groupId, patch) {
     const updated = all.map(g => {
         if (String(g.id) !== String(groupId))
             return g;
-        next = { ...g, ...patch, updatedAt: new Date().toISOString() };
+        let safePatch = { ...patch };
+        // Strip non-existent user IDs from any members array in the patch.
+        if (Array.isArray(patch.members)) {
+            const validIds = new Set(listUsers().map(u => String(u.id)));
+            safePatch.members = patch.members.filter(id => validIds.has(String(id)));
+        }
+        next = { ...g, ...safePatch, updatedAt: new Date().toISOString() };
         return next;
     });
     if (next) {

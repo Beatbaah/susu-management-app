@@ -49,19 +49,29 @@ export function Settings() {
         setImportError(null);
         try {
             const parsed = JSON.parse(importText);
-            if (Array.isArray(parsed.users))
-                setUsers(parsed.users);
-            if (Array.isArray(parsed.payments))
-                setPayments(parsed.payments);
-            if (Array.isArray(parsed.groups))
-                setGroups(parsed.groups);
-            if (Array.isArray(parsed.schedule))
-                setSchedule(parsed.schedule);
+            // Validate each array contains only objects with an id field.
+            const validRecords = (arr) => Array.isArray(arr) && arr.every(r => r && typeof r === 'object' && r.id != null);
+            if (parsed.users !== undefined && !validRecords(parsed.users)) {
+                setImportError('Invalid users data — each record must have an id field.'); return;
+            }
+            if (parsed.payments !== undefined && !validRecords(parsed.payments)) {
+                setImportError('Invalid payments data — each record must have an id field.'); return;
+            }
+            if (parsed.groups !== undefined && !validRecords(parsed.groups)) {
+                setImportError('Invalid groups data — each record must have an id field.'); return;
+            }
+            if (parsed.schedule !== undefined && !Array.isArray(parsed.schedule)) {
+                setImportError('Invalid schedule data.'); return;
+            }
+            if (Array.isArray(parsed.users)) setUsers(parsed.users);
+            if (Array.isArray(parsed.payments)) setPayments(parsed.payments);
+            if (Array.isArray(parsed.groups)) setGroups(parsed.groups);
+            if (Array.isArray(parsed.schedule)) setSchedule(parsed.schedule);
             setDialog(null);
             setImportText('');
             toast.success('Import successful');
         }
-        catch (e) {
+        catch {
             setImportError('Invalid backup file. Expecting JSON exported from this app.');
         }
     };

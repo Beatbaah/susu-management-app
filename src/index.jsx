@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { AppProvider } from './context/AppContext';
+import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { Toaster } from './components/ui/sonner';
 import './styles/App.css';
 if ('serviceWorker' in navigator) {
@@ -19,8 +20,10 @@ if (!rootElement)
     throw new Error('Failed to find the root element');
 const root = ReactDOM.createRoot(rootElement);
 root.render(<React.StrictMode>
-    <AppProvider>
-      <App />
-      <Toaster />
-    </AppProvider>
+    <AppErrorBoundary>
+      <AppProvider>
+        <App />
+        <Toaster />
+      </AppProvider>
+    </AppErrorBoundary>
   </React.StrictMode>);

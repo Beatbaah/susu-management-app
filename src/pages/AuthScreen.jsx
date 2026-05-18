@@ -2,15 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
     Lock, Mail, Smartphone, ArrowRight, Fingerprint, User, Phone, MapPin,
     CreditCard, Users, Upload, FileCheck, ShieldCheck, ScrollText, CheckCircle,
-    Camera, RotateCcw, Eye, EyeOff, Shield, Briefcase, UserCircle2, AlertCircle,
-    CheckCircle2,
+    Camera, RotateCcw, Eye, EyeOff, AlertCircle, CheckCircle2,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { validateLogin } from '../validation/authRules';
 import { signIn, resetPassword } from '../services/authService';
 import { uploadRegistrationDoc } from '../services/storageService';
-import { isFirebaseConfigured } from '../utils/firebase';
 import { readStore } from '../services/storage';
 import { cn } from '../components/ui/utils';
 
@@ -19,7 +17,7 @@ import { cn } from '../components/ui/utils';
 function FieldWrapper({ label, icon: Icon, children }) {
     return (
         <div className="space-y-1.5">
-            <p className="eyebrow text-foreground/50 ml-1">{label}</p>
+            <p className="eyebrow text-muted-foreground ml-1">{label}</p>
             <div className="relative group">
                 {Icon && (
                     <Icon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/30 group-focus-within:text-primary transition-colors pointer-events-none"/>
@@ -38,13 +36,6 @@ const inputCls = (withIcon = true) =>
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const GHANA_PHONE_RE = /^(\+233|0)[2-5][0-9]{8}$/;
-
-const DEMO_ACCOUNTS = [
-    { email: 'admin@excellentsusu.com',     label: 'Admin',     icon: ShieldCheck,   tone: 'text-primary' },
-    { email: 'manager@excellentsusu.com',   label: 'Manager',   icon: Briefcase,     tone: 'text-yellow-400' },
-    { email: 'collector@excellentsusu.com', label: 'Collector', icon: Shield,        tone: 'text-purple-400' },
-    { email: 'kwame@gmail.com',             label: 'Member',    icon: UserCircle2,   tone: 'text-emerald-400' },
-];
 
 const STEPS = [
     { title: 'Profile',     icon: User },
@@ -98,12 +89,10 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
         return stored?.biometricLogin !== false;
     })();
 
-    const visibleGroups = registrationGroups.length
-        ? registrationGroups.filter(g => g.listedForRegistration !== false)
-        : [{ id: 'grp-market', groupName: 'Market Women Circle' }];
+    const visibleGroups = registrationGroups.filter(g => g.listedForRegistration !== false);
 
     useEffect(() => {
-        if (!visibleGroups.length) return;
+        if (!visibleGroups.length) { setPreferredGroup(''); return; }
         if (!visibleGroups.some(g => String(g.id) === String(preferredGroup))) {
             setPreferredGroup(String(visibleGroups[0].id));
         }
@@ -142,6 +131,10 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
     const readUpload = async (key, file) => {
         if (!file) return;
         const url = await uploadRegistrationDoc(`pending-${Date.now()}`, key, file);
+        if (!url) {
+            setStepError('Upload failed. Please check your connection and try again.');
+            return;
+        }
         if (key === 'passportPic')   setPassportPic(url);
         if (key === 'ghanaCardFront') setGhanaCardFront(url);
         if (key === 'ghanaCardBack')  setGhanaCardBack(url);
@@ -267,7 +260,7 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
             acceptedTerms,
             acceptedDataPolicy,
             joinedAt: new Date().toISOString().split('T')[0],
-            color: 'var(--primary)',
+            color: '#6491DE',
             streak: 0,
             badges: [],
             points: 0,
@@ -341,12 +334,6 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
                     <p className="text-foreground/40 mt-1.5 text-sm font-medium">
                         {mode === 'login' ? 'Secure access to your financial hub' : 'Submit your member registration'}
                     </p>
-                    {!isFirebaseConfigured && mode === 'login' && (
-                        <div className="inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full border border-yellow-400/20 bg-yellow-400/5 text-yellow-300 text-xs font-bold uppercase tracking-wider">
-                            <span className="w-1.5 h-1.5 rounded-full bg-yellow-300 animate-pulse"/>
-                            Demo mode
-                        </div>
-                    )}
                 </div>
 
                 {/* Card */}
@@ -456,43 +443,6 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
                                 </div>
                             )}
 
-                            {/* Demo accounts */}
-                            {!isFirebaseConfigured && (
-                                <div>
-                                    <div className="flex items-center gap-3 mb-3">
-                                        <div className="h-px flex-1 bg-border"/>
-                                        <span className="eyebrow text-foreground/30">Demo accounts</span>
-                                        <div className="h-px flex-1 bg-border"/>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        {DEMO_ACCOUNTS.map(demo => {
-                                            const Icon = demo.icon;
-                                            const active = email === demo.email;
-                                            return (
-                                                <button
-                                                    key={demo.email}
-                                                    type="button"
-                                                    onClick={() => { setEmail(demo.email); setPassword('demo1234'); setLoginError(null); setForgotSent(false); }}
-                                                    className={cn(
-                                                        'flex items-center gap-2 px-3 py-2.5 rounded-2xl border transition-all text-left',
-                                                        active
-                                                            ? 'border-primary/40 bg-primary/10'
-                                                            : 'border-border bg-input-background hover:border-primary/30 hover:bg-accent'
-                                                    )}
-                                                >
-                                                    <Icon className={cn('w-4 h-4 flex-shrink-0', active ? 'text-primary' : demo.tone)}/>
-                                                    <div className="min-w-0">
-                                                        <p className={cn('text-xs font-bold', active ? 'text-primary' : 'text-foreground')}>{demo.label}</p>
-                                                        <p className="text-xs text-foreground/35 truncate">{demo.email.split('@')[0]}</p>
-                                                    </div>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                    <p className="text-xs text-foreground/25 mt-2 text-center">Tap a role to autofill, then sign in.</p>
-                                </div>
-                            )}
-
                             <Button
                                 type="submit"
                                 disabled={loading}
@@ -568,18 +518,25 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
                                         <Input type="text" placeholder="Madina Market, Accra" className={inputCls()} value={regAddress} onChange={e => { setRegAddress(e.target.value); setStepError(null); }} required/>
                                     </FieldWrapper>
                                     <FieldWrapper label="Preferred Group" icon={Users}>
-                                        <select
-                                            className={cn(inputCls(), 'w-full appearance-none')}
-                                            value={preferredGroup}
-                                            onChange={e => { setPreferredGroup(e.target.value); setStepError(null); }}
-                                            required
-                                        >
-                                            {visibleGroups.map(g => (
-                                                <option key={g.id} value={g.id} className="bg-card">
-                                                    {g.groupName || g.name}
-                                                </option>
-                                            ))}
-                                        </select>
+                                        {visibleGroups.length === 0 ? (
+                                            <div className={cn(inputCls(), 'flex items-center text-muted-foreground text-sm cursor-not-allowed opacity-60')}>
+                                                No groups open for registration yet
+                                            </div>
+                                        ) : (
+                                            <select
+                                                className={cn(inputCls(), 'w-full appearance-none')}
+                                                value={preferredGroup}
+                                                onChange={e => { setPreferredGroup(e.target.value); setStepError(null); }}
+                                                required
+                                            >
+                                                <option value="">Select a group…</option>
+                                                {visibleGroups.map(g => (
+                                                    <option key={g.id} value={g.id} className="bg-card">
+                                                        {g.groupName || g.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        )}
                                     </FieldWrapper>
                                 </>
                             )}

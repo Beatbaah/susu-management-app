@@ -1,4 +1,5 @@
 import { Search, Download, Share2, CheckCircle } from 'lucide-react';
+import { toast } from '../utils/toast';
 import { useMemo, useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -50,7 +51,11 @@ export function Receipts() {
     });
     const totalValue = receipts.reduce((sum, r) => sum + r.amount, 0);
     const handleDownload = (r) => {
-        renderReceiptDocument({ ...r.rawPayment, ref: r.receiptNo }, r.rawMember || { name: r.member }, r.rawGroup || { name: r.group });
+        try {
+            renderReceiptDocument({ ...r.rawPayment, ref: r.receiptNo }, r.rawMember || { name: r.member }, r.rawGroup || { name: r.group });
+        } catch {
+            toast.error('Could not generate receipt. Please try again.');
+        }
     };
     const handleShare = async (r) => {
         const text = `${r.receiptNo} — ${r.member} paid ${fmt(r.amount)} to ${r.group} on ${r.paymentDate}.`;

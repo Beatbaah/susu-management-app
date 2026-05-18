@@ -3,9 +3,9 @@ import { MOCK_USERS, MOCK_GROUPS, MOCK_PAYMENTS, MOCK_REMINDERS, PAYOUT_SCHEDULE
 import { setCurrencySymbol } from '../utils/helpers';
 import { readStore, writeStore, clearNamespace } from '../services/storage';
 import { listUsers, replaceUsers as svcReplaceUsers, updateUser as svcUpdateUser } from '../services/userService';
-import { registerMember as svcRegisterMember, approveMember as svcApproveMember, rejectMember as svcRejectMember, suspendMember as svcSuspendMember, assignGroup as svcAssignGroup, } from '../services/memberService';
+import { registerMember as svcRegisterMember, approveMember as svcApproveMember, rejectMember as svcRejectMember, suspendMember as svcSuspendMember, reinstateMember as svcReinstateMember, assignGroup as svcAssignGroup, } from '../services/memberService';
 import { listGroups, createGroup as svcCreateGroup, updateGroup as svcUpdateGroup, replaceGroups as svcReplaceGroups, } from '../services/groupService';
-import { listPayments, recordPayment as svcRecordPayment, confirmPayment as svcConfirmPayment, rejectPayment as svcRejectPayment, updatePayment as svcUpdatePayment, replacePayments as svcReplacePayments, markOverduePayments as svcMarkOverduePayments, } from '../services/paymentService';
+import { listPayments, recordPayment as svcRecordPayment, confirmPayment as svcConfirmPayment, rejectPayment as svcRejectPayment, reopenPayment as svcReopenPayment, updatePayment as svcUpdatePayment, replacePayments as svcReplacePayments, markOverduePayments as svcMarkOverduePayments, } from '../services/paymentService';
 import { listPayouts, completePayout as svcCompletePayout, assignPayoutRecipient as svcAssignPayoutRecipient, replacePayouts as svcReplacePayouts, } from '../services/payoutService';
 import { postMessage as svcPostMessage, postAnnouncement as svcPostAnnouncement, addReaction as svcAddReaction } from '../services/chatService';
 import { listReminders, sendReminder as svcSendReminder, markRead as svcMarkRead, markAllRead as svcMarkAllRead, deleteReminder as svcDeleteReminder, clearReminders as svcClearReminders, replaceReminders as svcReplaceReminders, } from '../services/notificationService';
@@ -24,8 +24,31 @@ const DEFAULT_SETTINGS = {
     currency: 'GHS (GH₵)',
 };
 const AppContext = createContext(undefined);
-const DEMO_DATA_VERSION = '2026-05-figma-seed';
+const DEMO_DATA_VERSION = '2026-05-production-v2';
+const LS_VERSION_KEY = 'excellent_susu_v1_dataVersion';
+const LS_NAMESPACE   = 'excellent_susu_v1_';
+
+function wipeLocalStorage() {
+    try {
+        Object.keys(localStorage)
+            .filter(k => k.startsWith(LS_NAMESPACE))
+            .forEach(k => localStorage.removeItem(k));
+        localStorage.setItem(LS_VERSION_KEY, DEMO_DATA_VERSION);
+    } catch { /* storage disabled */ }
+}
+
 const loadInitialState = () => {
+    let storedVersion = null;
+    try { storedVersion = localStorage.getItem(LS_VERSION_KEY); } catch {}
+    if (storedVersion !== DEMO_DATA_VERSION) {
+        wipeLocalStorage();
+        return {
+            authUser: null,
+            users: [], payments: [], groups: [], reminders: [], schedule: [],
+            auditLogs: [],
+            settings: { ...DEFAULT_SETTINGS },
+        };
+    }
     const authUser = getCurrentUser();
     const users = listUsers();
     const payments = listPayments();
@@ -34,26 +57,11 @@ const loadInitialState = () => {
     const schedule = listPayouts();
     const auditLogs = listLogs();
     const settings = { ...DEFAULT_SETTINGS, ...readStore('settings', {}) };
-    let version = null;
+    // Restore dark mode from the standalone pref key (survives Firestore mode).
     try {
-        version = localStorage.getItem('excellent_susu_v1_dataVersion');
-    }
-    catch { }
-    const hasEmptyLegacyPortfolio = version !== DEMO_DATA_VERSION &&
-        Array.isArray(groups) && Array.isArray(payments) &&
-        groups.length === 0 && payments.length === 0;
-    if (hasEmptyLegacyPortfolio) {
-        return {
-            authUser: authUser && MOCK_USERS.some(u => u.id === authUser.id) ? authUser : null,
-            users: MOCK_USERS,
-            payments: MOCK_PAYMENTS,
-            groups: MOCK_GROUPS,
-            reminders: MOCK_REMINDERS,
-            schedule: PAYOUT_SCHEDULE,
-            auditLogs,
-            settings,
-        };
-    }
+        const savedDark = localStorage.getItem('excellent_susu_pref_darkMode');
+        if (savedDark !== null) settings.darkMode = savedDark === 'true';
+    } catch {}
     return { authUser, users, payments, groups, reminders, schedule, auditLogs, settings };
 };
 export const AppProvider = ({ children }) => {
@@ -88,16 +96,30 @@ export const AppProvider = ({ children }) => {
         if (typeof document === 'undefined')
             return;
         document.documentElement.classList.toggle('dark', settings.darkMode);
+        // Persist independently of Firestore so dark mode survives page reloads
+        // even when writeStore is a no-op in Firestore mode.
+        try { localStorage.setItem('excellent_susu_pref_darkMode', String(settings.darkMode)); } catch {}
     }, [settings.darkMode]);
     useEffect(() => {
         // Settings store the display string like "GHS (GH₵)". Extract the symbol
         // for fmt() — fallback to the whole string when no parens found.
         const match = settings.currency.match(/\(([^)]+)\)/);
-        setCurrencySymbol(match ? match[1] : settings.currency);
+        setCurrencySymbol(match ? match[1].trim() : settings.currency.split(/\s+/)[0].trim());
     }, [settings.currency]);
     useEffect(() => {
+        if (!isFirestoreReady()) {
+            try {
+                localStorage.setItem('excellent_susu_v1_dataVersion', DEMO_DATA_VERSION);
+            }
+            catch { }
+        }
+    }, []);
+    useEffect(() => {
+        if (!isFirestoreReady())
+            return;
         try {
-            localStorage.setItem('excellent_susu_v1_dataVersion', DEMO_DATA_VERSION);
+            clearNamespace();
+            localStorage.removeItem('excellent_susu_v1_dataVersion');
         }
         catch { }
     }, []);
@@ -111,8 +133,8 @@ export const AppProvider = ({ children }) => {
     // Phase 3 — when Firebase is configured, subscribe to every collection so
     // remote changes (made on another device or by Cloud Functions) propagate
     // into the React cache. Writes still go through services, which already
-    // mirror to Firestore. The local seed (mock data) is overwritten by the
-    // first non-empty snapshot from Firestore.
+    // mirror to Firestore. The local seed is overwritten by the first Firestore
+    // snapshot, including empty collections.
     useEffect(() => {
         if (!isFirestoreReady())
             return;
@@ -129,23 +151,16 @@ export const AppProvider = ({ children }) => {
         // subscribeCollection internally waits for anonymous auth, so we can
         // attach immediately without an extra await here.
         const unsubs = [
-            subscribeCollection('users', items => { markReady(); if (items.length)
-                setUsers(items); }),
-            subscribeCollection('groups', items => { markReady(); if (items.length)
-                setGroups(items); }),
-            subscribeCollection('payments', items => { markReady(); if (items.length)
-                setPayments(items); }),
-            subscribeCollection('payouts', items => { markReady(); if (items.length)
-                setSchedule(items); }),
-            subscribeCollection('notifications', items => { markReady(); if (items.length)
-                setReminders(items); }),
+            subscribeCollection('users', items => { markReady(); setUsers(items); }),
+            subscribeCollection('groups', items => { markReady(); setGroups(items); }),
+            subscribeCollection('payments', items => { markReady(); setPayments(items); }),
+            subscribeCollection('payouts', items => { markReady(); setSchedule(items); }),
+            subscribeCollection('notifications', items => { markReady(); setReminders(items); }),
             subscribeCollection('auditLogs', items => {
                 markReady();
-                if (items.length) {
-                    setAuditLogs([...items]
-                        .sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime())
-                        .slice(0, 250));
-                }
+                setAuditLogs([...items]
+                    .sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime())
+                    .slice(0, 250));
             }),
         ];
         return () => {
@@ -185,15 +200,16 @@ export const AppProvider = ({ children }) => {
         catch { }
     };
     // Auto-suspension sweep: if a member has 3+ overdue payments, suspend them.
-    // Runs when authUser changes and the actor is staff (the only roles that
-    // can see/act on this; members would not have visibility).
+    // Runs when authUser changes and the actor is staff.
     useEffect(() => {
         if (!authUser || !['admin', 'manager'].includes(authUser.role))
             return;
-        const currentUsers = usersRef.current;
-        const currentPayments = paymentsRef.current;
+        // Read directly from the service layer to avoid stale ref data on login.
+        const currentUsers = listUsers();
+        const currentPayments = listPayments();
         const newReminders = [];
         const updatedUsers = [...currentUsers];
+        const newlySuspendedIds = [];
         currentUsers.forEach(u => {
             if (u.role !== 'member' || u.status !== 'approved')
                 return;
@@ -202,7 +218,7 @@ export const AppProvider = ({ children }) => {
                 return;
             newReminders.push({
                 id: `auto-${u.id}-${Date.now()}`,
-                title: 'Late Payment Warning ⚠️',
+                title: 'Late Payment Warning',
                 text: `You have ${overdue.length} overdue payment(s).`,
                 date: 'Automated',
                 type: 'warning',
@@ -214,13 +230,26 @@ export const AppProvider = ({ children }) => {
                 if (idx !== -1 && updatedUsers[idx].status !== 'suspended') {
                     updatedUsers[idx] = { ...updatedUsers[idx], status: 'suspended' };
                     svcSuspendMember(u.id);
+                    newlySuspendedIds.push(String(u.id));
                 }
             }
         });
-        if (newReminders.length > 0)
+        if (newReminders.length > 0) {
+            svcReplaceReminders([...newReminders, ...listReminders()]);
             setReminders(prev => [...newReminders, ...prev]);
+        }
         if (JSON.stringify(updatedUsers) !== JSON.stringify(currentUsers))
             setUsers(updatedUsers);
+        // Remove newly suspended members from their groups.
+        if (newlySuspendedIds.length > 0) {
+            const groupsNext = listGroups().map(g => {
+                const members = Array.isArray(g.members) ? g.members : [];
+                const filtered = members.filter(id => !newlySuspendedIds.includes(String(id)));
+                return filtered.length !== members.length ? { ...g, members: filtered } : g;
+            });
+            svcReplaceGroups(groupsNext);
+            setGroups(groupsNext);
+        }
     }, [authUser]);
     // ----- Action methods (delegate to services) -----
     const recordPayment = (p) => {
@@ -233,7 +262,7 @@ export const AppProvider = ({ children }) => {
     };
     const confirmPayment = (paymentId) => {
         const current = payments.find(p => p.id === paymentId);
-        const next = svcConfirmPayment(paymentId, authUser?.id);
+        const next = svcConfirmPayment(paymentId, authUser?.id, authUser?.role);
         if (next && next.status === 'paid') {
             setPayments(prev => prev.map(p => (p.id === paymentId ? next : p)));
             logAudit({ action: 'confirm payment', targetType: 'payment', targetId: paymentId, oldValue: current, newValue: next });
@@ -242,11 +271,19 @@ export const AppProvider = ({ children }) => {
     };
     const rejectPayment = (paymentId) => {
         const current = payments.find(p => p.id === paymentId);
-        const next = svcRejectPayment(paymentId, authUser?.id);
+        const next = svcRejectPayment(paymentId, authUser?.id, authUser?.role);
         if (next && next.status === 'rejected') {
             setPayments(prev => prev.map(p => (p.id === paymentId ? next : p)));
             logAudit({ action: 'reject payment', targetType: 'payment', targetId: paymentId, oldValue: current, newValue: next });
         }
+        return next;
+    };
+    const reopenPayment = (paymentId) => {
+        const current = payments.find(p => p.id === paymentId);
+        const next = svcReopenPayment(paymentId, authUser?.id);
+        if (!next) return null;
+        setPayments(prev => prev.map(p => (p.id === paymentId ? next : p)));
+        logAudit({ action: 'reopen payment', targetType: 'payment', targetId: paymentId, oldValue: current, newValue: next });
         return next;
     };
     const updatePayment = (paymentId, patch) => {
@@ -332,15 +369,35 @@ export const AppProvider = ({ children }) => {
         logAudit({ action: 'approve registration', targetType: 'user', targetId: approved.id, newValue: approved });
         return approved;
     };
+    const reinstateUser = (userId) => {
+        const reinstated = svcReinstateMember(userId, authUser?.id);
+        if (!reinstated) return null;
+        setUsers(prev => prev.map(u => (String(u.id) === String(userId) ? reinstated : u)));
+        logAudit({ action: 'reinstate member', targetType: 'user', targetId: reinstated.id, newValue: reinstated });
+        return reinstated;
+    };
     const rejectUser = (userId) => {
         const rejected = svcRejectMember(userId, authUser?.id);
         if (!rejected)
             return null;
         setUsers(prev => prev.map(u => (String(u.id) === String(userId) ? rejected : u)));
+        // Remove rejected member from any group they belong to.
+        const currentGroups = listGroups();
+        const groupsNext = currentGroups.map(g => {
+            const members = Array.isArray(g.members) ? g.members : [];
+            if (!members.map(String).includes(String(userId))) return g;
+            return { ...g, members: members.filter(id => String(id) !== String(userId)) };
+        });
+        if (JSON.stringify(groupsNext) !== JSON.stringify(currentGroups)) {
+            svcReplaceGroups(groupsNext);
+            setGroups(groupsNext);
+        }
         logAudit({ action: 'reject registration', targetType: 'user', targetId: rejected.id, newValue: rejected });
         return rejected;
     };
     const assignUserToGroup = (userId, groupId) => {
+        if (groupId && !listGroups().find(g => String(g.id) === String(groupId)))
+            return;
         svcAssignGroup(userId, groupId);
         setUsers(prev => prev.map(u => (String(u.id) === String(userId) ? { ...u, groupId } : u)));
         const groupsNext = listGroups().map(g => {
@@ -449,9 +506,10 @@ export const AppProvider = ({ children }) => {
             auditLogs, logAudit,
             settings, updateSetting,
             appReady,
-            recordPayment, confirmPayment, rejectPayment, updatePayment,
+            dismissedNotifications,
+            recordPayment, confirmPayment, rejectPayment, reopenPayment, updatePayment,
             completePayout, assignPayoutRecipient,
-            registerMember, updateMember, approveUser, rejectUser,
+            registerMember, updateMember, approveUser, rejectUser, reinstateUser,
             createGroup, updateGroup,
             postChatMessage, postAnnouncement, addChatReaction,
             sendReminder, markReminderRead, markAllRemindersRead, deleteReminder, clearReminders, dismissMemberNotification, dismissPaymentNotification, dismissAllNotifications, clearAllNotifications,

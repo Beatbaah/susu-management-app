@@ -2,6 +2,7 @@ import { readStore, writeStore } from './storage';
 import { PAYOUT_SCHEDULE } from '../data/mockData';
 import { advanceRound, findGroup } from './groupService';
 import { listPayments, replacePayments } from './paymentService';
+import { listUsers } from './userService';
 import { validatePayoutCompletion } from '../validation/payoutRules';
 import { replaceCollection, upsertDoc } from './firestoreSync';
 import { genId } from '../utils/helpers';
@@ -67,7 +68,7 @@ export function completePayout(payoutId, completedBy, override = false) {
                     groupId: updatedGroup.id,
                     groupName: updatedGroup.groupName || updatedGroup.name,
                     amount,
-                    date: '',
+                    date: dueDate,
                     dueDate,
                     status: 'pending',
                     round: newRound,
@@ -89,6 +90,16 @@ export function assignPayoutRecipient(payoutId, recipientId, assignedBy) {
     if (current.paid || current.status === 'completed' || current.status === 'paid') {
         return { ok: false, message: 'Completed payouts cannot be reassigned.' };
     }
+    // Validate recipient exists and is an active approved member.
+    const recipient = listUsers().find(u => String(u.id) === String(recipientId));
+    if (!recipient)
+        return { ok: false, message: 'Member not found.' };
+    if (recipient.status !== 'approved')
+        return { ok: false, message: 'Only active members can receive payouts.' };
+    // Validate recipient belongs to the payout's group.
+    const group = findGroup(current.groupId);
+    if (group && Array.isArray(group.members) && !group.members.map(String).includes(String(recipientId)))
+        return { ok: false, message: 'Member is not part of this group.' };
     const next = {
         ...current,
         recipientId,

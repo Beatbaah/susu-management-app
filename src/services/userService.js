@@ -3,6 +3,7 @@ import { MOCK_USERS } from '../data/mockData';
 import { genId } from '../utils/helpers';
 import { replaceCollection, upsertDoc } from './firestoreSync';
 const STORE_KEY = 'users';
+const VALID_ROLES = new Set(['admin', 'manager', 'collector', 'member']);
 export function listUsers() {
     return readStore(STORE_KEY, MOCK_USERS);
 }
@@ -17,7 +18,7 @@ export function createUser(input) {
     const now = new Date().toISOString();
     const newUser = {
         id: input.id || genId(),
-        role: 'member',
+        role: VALID_ROLES.has(input.role) ? input.role : 'member',
         status: 'pending',
         color: '#5b8def',
         streak: 0,

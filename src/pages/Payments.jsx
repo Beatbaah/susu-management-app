@@ -1,4 +1,4 @@
-import { Search, Plus, CheckCircle, Clock, XCircle, Upload, X } from 'lucide-react';
+import { Search, Plus, CheckCircle, Clock, XCircle, Upload, X, RotateCcw } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { EmptyState } from '../components/ui/EmptyState';
 import { SkeletonList } from '../components/ui/LoadingState';
@@ -15,7 +15,7 @@ const EMPTY_DRAFT = {
     dueDate: '',
 };
 export function Payments() {
-    const { authUser, payments, users, groups, confirmPayment, rejectPayment, recordPayment, updatePayment, appReady } = useAppContext();
+    const { authUser, payments, users, groups, confirmPayment, rejectPayment, reopenPayment, recordPayment, updatePayment, appReady } = useAppContext();
     const [filterStatus, setFilterStatus] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -173,7 +173,7 @@ export function Payments() {
         </div>
 
         <div className="flex rounded-xl border border-border bg-card/70 p-1 mb-4 sm:mb-6 overflow-x-auto no-scrollbar">
-          {['all', 'paid', 'pending', 'overdue'].map(status => (<button key={status} onClick={() => setFilterStatus(status)} className={`min-w-0 flex-1 px-2.5 py-1.5 rounded-lg whitespace-nowrap app-tab transition-colors flex-shrink-0 ${filterStatus === status
+          {['all', 'paid', 'pending', 'overdue', 'rejected'].map(status => (<button key={status} onClick={() => setFilterStatus(status)} className={`min-w-0 flex-1 px-2.5 py-1.5 rounded-lg whitespace-nowrap app-tab transition-colors flex-shrink-0 ${filterStatus === status
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}>
               {status === 'all' ? 'All' : status === 'paid' ? 'Confirmed' : status.charAt(0).toUpperCase() + status.slice(1)}
@@ -200,8 +200,8 @@ export function Payments() {
             <div className="divide-y divide-border">
               {filteredPayments.map((payment) => {
                 const initials = payment.memberName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
-                const SC = { paid: 'bg-success/15 text-success', pending: 'bg-primary/15 text-primary', overdue: 'bg-destructive/15 text-destructive' };
-                const SL = { paid: 'Confirmed', pending: 'Pending', overdue: 'Overdue' };
+                const SC = { paid: 'bg-success/15 text-success', pending: 'bg-primary/15 text-primary', overdue: 'bg-destructive/15 text-destructive', rejected: 'bg-muted text-muted-foreground' };
+                const SL = { paid: 'Confirmed', pending: 'Pending', overdue: 'Overdue', rejected: 'Rejected' };
                 const rawDate = payment.paymentDate || payment.date || payment.dueDate;
                 const displayDate = rawDate ? new Date(rawDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '—';
                 return (
@@ -225,6 +225,9 @@ export function Payments() {
                         {payment.status === 'overdue' && canRecord && (
                           <button type="button" onClick={() => openDialog({ memberId: payment.memberId || payment.userId || '', groupId: payment.groupId, amount: String(payment.amount), round: String(payment.round || ''), dueDate: payment.dueDate || '' })} className="w-7 h-7 rounded-lg bg-primary/15 text-primary hover:bg-primary/25 flex items-center justify-center" title="Record"><Upload className="w-3.5 h-3.5"/></button>
                         )}
+                        {payment.status === 'rejected' && canConfirm && (
+                          <button type="button" onClick={() => { reopenPayment(payment.id); toast.success('Payment reopened'); }} className="w-7 h-7 rounded-lg bg-warning/15 text-warning hover:bg-warning/25 flex items-center justify-center" title="Reopen"><RotateCcw className="w-3.5 h-3.5"/></button>
+                        )}
                         {canRecord && payment.status !== 'paid' && (
                           <button type="button" onClick={() => openEditDialog(payment)} className="w-7 h-7 rounded-lg bg-muted text-muted-foreground hover:bg-accent hover:text-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" title="Edit">
                             <span className="app-badge leading-none">✎</span>
@@ -247,7 +250,7 @@ export function Payments() {
                           </div>
                         </div>
                       </div>
-                      {((payment.status === 'pending' && canConfirm) || (payment.status === 'overdue' && canRecord)) && (
+                      {((payment.status === 'pending' && canConfirm) || (payment.status === 'overdue' && canRecord) || (payment.status === 'rejected' && canConfirm)) && (
                         <div className="flex gap-2 mt-2.5 pl-10">
                           {payment.status === 'pending' && canConfirm && (<>
                             <button type="button" onClick={() => { confirmPayment(payment.id); toast.success(`Confirmed ${fmt(payment.amount)}`); }} className="flex-1 py-1.5 rounded-lg bg-success/15 text-success app-action flex items-center justify-center gap-1.5"><CheckCircle className="w-3 h-3"/>Confirm</button>
@@ -255,6 +258,9 @@ export function Payments() {
                           </>)}
                           {payment.status === 'overdue' && canRecord && (
                             <button type="button" onClick={() => openDialog({ memberId: payment.memberId || payment.userId || '', groupId: payment.groupId, amount: String(payment.amount), round: String(payment.round || ''), dueDate: payment.dueDate || '' })} className="flex-1 py-1.5 rounded-lg bg-primary/15 text-primary app-action flex items-center justify-center gap-1.5"><Upload className="w-3 h-3"/>Record</button>
+                          )}
+                          {payment.status === 'rejected' && canConfirm && (
+                            <button type="button" onClick={() => { reopenPayment(payment.id); toast.success('Payment reopened'); }} className="flex-1 py-1.5 rounded-lg bg-warning/15 text-warning app-action flex items-center justify-center gap-1.5"><RotateCcw className="w-3 h-3"/>Reopen</button>
                           )}
                         </div>
                       )}

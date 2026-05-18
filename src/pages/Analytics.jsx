@@ -36,9 +36,9 @@ const monthLabel = (key) => {
 };
 const dayLabel = (d) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
 export function Analytics() {
-    const { payments, groups, schedule } = useAppContext();
+    const { payments, groups, schedule, users } = useAppContext();
     const [rangeMonths, setRangeMonths] = useState(6);
-    const metrics = useMemo(() => calculateFinancialMetrics({ payments, groups, payouts: schedule }), [payments, groups, schedule]);
+    const metrics = useMemo(() => calculateFinancialMetrics({ payments, groups, payouts: schedule, users }), [payments, groups, schedule, users]);
     const collectionData = useMemo(() => {
         const now = new Date();
         const buckets = new Map();

@@ -36,11 +36,16 @@ export function validatePayoutCompletion({ payout, group, payments = [], overrid
         return { ok: false, message: "Payout must have a group and recipient." };
     if (override)
         return { ok: true, message: "" };
-    const groupPayments = payments.filter(p => p.groupId === payout.groupId);
-    const verified = groupPayments.filter(p => p.status === "paid").length;
+    // Scope the check to the current round so prior-round payments don't mask
+    // unpaid contributions in the active round.
+    const payoutRound = payout.round ?? group?.currentRound;
+    const roundPayments = payoutRound != null
+        ? payments.filter(p => p.groupId === payout.groupId && String(p.round) === String(payoutRound))
+        : payments.filter(p => p.groupId === payout.groupId);
+    const verified = roundPayments.filter(p => p.status === "paid").length;
     const expected = group?.members?.length || group?.totalSlots || 0;
     if (expected > 0 && verified < expected) {
-        return { ok: false, message: "Required payments must be verified before completing payout." };
+        return { ok: false, message: `${verified} of ${expected} payments verified for this round. Complete all collections before disbursing.` };
     }
     return { ok: true, message: "" };
 }
@@ -60,7 +65,12 @@ export function getDefaulterRisk(payment, today = new Date()) {
         return { level: "Medium", daysOverdue: delta };
     return { level: "High", daysOverdue: delta };
 }
-export function calculateFinancialMetrics({ payments = [], groups = [], payouts = [] }) {
+export function calculateFinancialMetrics({ payments = [], groups = [], payouts = [], users = [] }) {
+    // Build a set of approved member IDs so we only count their overdue payments
+    // in the default rate — suspended/rejected members should not inflate it.
+    const activeMemberIds = users.length > 0
+        ? new Set(users.filter(u => u.status === "approved").map(u => String(u.id)))
+        : null;
     const totalPaid = payments.filter(p => p.status === "paid").reduce((sum, p) => sum + normalizeMoney(p.amount), 0);
     const totalOverdue = payments.filter(p => p.status === "overdue").reduce((sum, p) => sum + normalizeMoney(p.amount), 0);
     const expected = groups.reduce((sum, g) => {
@@ -73,7 +83,11 @@ export function calculateFinancialMetrics({ payments = [], groups = [], payouts 
     }, 0);
     const totalPaidOut = payouts.filter(p => p.status === "completed" || p.paid).reduce((sum, p) => sum + normalizeMoney(p.payoutAmount || p.amount), 0);
     const expectedPayments = payments.length || 1;
-    const overduePayments = payments.filter(p => p.status === "overdue").length;
+    const overduePayments = payments.filter(p => {
+        if (p.status !== "overdue") return false;
+        if (!activeMemberIds) return true;
+        return activeMemberIds.has(String(p.userId || p.memberId));
+    }).length;
     return {
         totalPaid,
         totalExpected: expected,

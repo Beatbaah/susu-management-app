@@ -26,6 +26,11 @@ export function postMessage(groupId, actor, message, type = 'message') {
     const group = findGroup(groupId);
     if (!group)
         return null;
+    // Members can only post in groups they belong to.
+    if (actor?.role === 'member') {
+        const members = Array.isArray(group.members) ? group.members : [];
+        if (!members.map(String).includes(String(actor?.id))) return null;
+    }
     const entry = {
         id: genId(),
         sender: actor?.id ?? 'unknown',

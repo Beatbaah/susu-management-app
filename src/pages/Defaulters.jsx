@@ -6,7 +6,7 @@ import { getDefaulterRisk } from '../utils/financeValidation';
 import { toast } from '../utils/toast';
 import { cn } from '../components/ui/utils';
 export function Defaulters() {
-    const { authUser, users, payments, groups, sendReminder, updateMember } = useAppContext();
+    const { authUser, users, payments, groups, sendReminder, reinstateUser } = useAppContext();
     const canManage = authUser && ['admin', 'manager'].includes(authUser.role);
     const [search, setSearch] = useState('');
     const [sentTo, setSentTo] = useState(null);
@@ -43,14 +43,15 @@ export function Defaulters() {
             };
         }).filter(Boolean);
     }, [users, payments, groups, today]);
-    const filtered = defaulters.filter(d => !search.trim() ||
-        d.name.toLowerCase().includes(search.toLowerCase()) ||
-        d.phone.includes(search) ||
-        d.group.toLowerCase().includes(search.toLowerCase()));
+    const q = search.trim().toLowerCase();
+    const filtered = defaulters.filter(d => !q ||
+        d.name.toLowerCase().includes(q) ||
+        d.phone.includes(search.trim()) ||
+        d.group.toLowerCase().includes(q));
     const avgDaysLate = defaulters.length ? Math.round(defaulters.reduce((s, d) => s + d.daysOverdue, 0) / defaulters.length) : 0;
     const totalOverdueAmount = defaulters.reduce((s, d) => s + d.dueAmount, 0);
     const handleReinstate = (d) => {
-        updateMember(d.id, { status: 'approved' });
+        reinstateUser(d.id);
         toast.success(`${d.name} reinstated`);
     };
     const handleSendReminder = (d) => {

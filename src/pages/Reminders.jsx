@@ -43,13 +43,17 @@ export function Reminders() {
             return users.filter(u => u.role === 'member' && u.status === 'pending').map(u => u.id);
         }
         if (draft.audience === 'overdue-only') {
+            const approvedIds = new Set(users.filter(u => u.status === 'approved').map(u => u.id));
             const ids = new Set();
-            payments.forEach(p => { if (p.status === 'overdue')
-                ids.add(p.memberId || p.userId); });
+            payments.forEach(p => {
+                if (p.status === 'overdue' && approvedIds.has(p.memberId || p.userId))
+                    ids.add(p.memberId || p.userId);
+            });
             return Array.from(ids);
         }
         return users.filter(u => u.role === 'member' && u.status === 'approved').map(u => u.id);
     };
+    const BROADCAST_WARN_THRESHOLD = 20;
     const handleSend = () => {
         setDialogError(null);
         const recipients = resolveRecipients();
@@ -60,6 +64,9 @@ export function Reminders() {
         if (!draft.title.trim() || !draft.text.trim()) {
             setDialogError('Title and message are required.');
             return;
+        }
+        if (recipients.length > BROADCAST_WARN_THRESHOLD) {
+            if (!window.confirm(`This will send to ${recipients.length} members. Continue?`)) return;
         }
         sendReminder({ userIds: recipients, title: draft.title.trim(), text: draft.text.trim(), type: draft.type, channels: draft.channels });
         // For external channels (WhatsApp/SMS/Call), open links for single recipient
@@ -234,7 +241,7 @@ export function Reminders() {
                   <label className="text-xs font-bold uppercase tracking-widest text-primary mb-2.5 block">Select Recipient</label>
                   <select value={draft.singleUserId} onChange={(e) => setDraft(d => ({ ...d, singleUserId: e.target.value }))} className="w-full bg-input-background border border-border rounded-2xl px-4 py-4 text-sm font-bold text-foreground focus:bg-card outline-none transition-all">
                     <option value="">Choose a member…</option>
-                    {users.filter(u => u.role === 'member').map(u => (<option key={u.id} value={u.id}>{u.fullName || u.name}</option>))}
+                    {users.filter(u => u.role === 'member' && u.status === 'approved').map(u => (<option key={u.id} value={u.id}>{u.fullName || u.name}</option>))}
                   </select>
                 </div>)}
 

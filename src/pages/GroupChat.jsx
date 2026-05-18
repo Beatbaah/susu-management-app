@@ -1,4 +1,5 @@
 import { Send, Paperclip, MessageSquare, Megaphone, X } from 'lucide-react';
+import { toast } from '../utils/toast';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { cn } from '../components/ui/utils';
@@ -13,10 +14,8 @@ export function GroupChat() {
     const scrollerRef = useRef(null);
     const fileInputRef = useRef(null);
     const handleFileAttach = useCallback((e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setMessageText(prev => prev ? `${prev} [File: ${file.name}]` : `[File: ${file.name}]`);
         e.target.value = '';
+        toast.info('File attachments are not yet supported.');
     }, []);
     const accessibleGroups = useMemo(() => {
         if (!authUser)
