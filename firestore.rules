@@ -1,0 +1,147 @@
+rules_version = '2';
+
+// Production Firestore rules for Excellent Susu.
+//
+// Architecture:
+//   - Users authenticate with Firebase Email/Password Auth.
+//   - Each user's Firestore document lives at users/{auth.uid} so
+//     request.auth.uid == userId is the ownership test.
+//   - Role is stored in the user document (role: 'admin'|'manager'|'collector'|'member').
+//     For stronger guarantees, migrate to custom claims set by a Cloud Function.
+//   - Anonymous auth is NOT permitted to write any data.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── helpers ──────────────────────────────────────────────────────────
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAnonymous() {
+      return request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+
+    // Real email/password (or other non-anonymous) authenticated user.
+    function isRealAuth() {
+      return signedIn() && !isAnonymous();
+    }
+
+    // Look up the caller's own user document to read their role.
+    // Requires users to be keyed by Firebase Auth UID.
+    function callerDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function callerRole() {
+      return callerDoc().data.role;
+    }
+
+    function isAdmin() {
+      return isRealAuth() && callerRole() == 'admin';
+    }
+
+    function isManager() {
+      return isRealAuth() && callerRole() in ['admin', 'manager'];
+    }
+
+    function isStaff() {
+      return isRealAuth() && callerRole() in ['admin', 'manager', 'collector'];
+    }
+
+    function isMember() {
+      return isRealAuth() && callerRole() == 'member';
+    }
+
+    function ownsDoc(userId) {
+      return isRealAuth() && request.auth.uid == userId;
+    }
+
+    // Deny attempts to escalate privileges via incoming write.
+    function noRoleEscalation() {
+      return !('role' in request.resource.data) ||
+             request.resource.data.role == resource.data.role ||
+             isAdmin();
+    }
+
+    // ── /users ───────────────────────────────────────────────────────────
+
+    match /users/{userId} {
+      allow read: if ownsDoc(userId) || isStaff();
+      allow create: if isManager() || ownsDoc(userId);
+      allow update: if (ownsDoc(userId) && noRoleEscalation()) || isManager();
+      allow delete: if false;
+    }
+
+    // ── /groups ──────────────────────────────────────────────────────────
+
+    match /groups/{groupId} {
+      allow read: if isStaff()
+        || (isMember() && request.auth.uid in resource.data.members);
+      allow create, update: if isManager();
+      allow delete: if false;
+    }
+
+    // ── /payments ────────────────────────────────────────────────────────
+
+    match /payments/{paymentId} {
+      allow read: if isStaff()
+        || (isMember() && resource.data.userId == request.auth.uid);
+      allow create: if isStaff();
+      allow update: if isManager() && resource.data.status != 'paid';
+      allow delete: if false;
+    }
+
+    // ── /payouts ─────────────────────────────────────────────────────────
+
+    match /payouts/{payoutId} {
+      allow read: if isStaff()
+        || (isMember() && resource.data.recipientId == request.auth.uid);
+      allow create, update: if isManager();
+      allow delete: if false;
+    }
+
+    // ── /messages/{groupId}/items ─────────────────────────────────────────
+
+    match /messages/{groupId}/items/{messageId} {
+      allow read: if isStaff()
+        || (isMember() && request.auth.uid in
+            get(/databases/$(database)/documents/groups/$(groupId)).data.members);
+      allow create: if isStaff()
+        || (isMember() && request.auth.uid in
+            get(/databases/$(database)/documents/groups/$(groupId)).data.members);
+      // Messages are immutable once sent.
+      allow update, delete: if false;
+    }
+
+    // ── /notifications ────────────────────────────────────────────────────
+
+    match /notifications/{notificationId} {
+      allow read: if isManager()
+        || (isRealAuth() && resource.data.userId == request.auth.uid);
+      allow create: if isManager();
+      // Owner can mark as read; managers can update any field.
+      allow update: if isManager()
+        || (isRealAuth() && resource.data.userId == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']));
+      allow delete: if false;
+    }
+
+    // ── /auditLogs ────────────────────────────────────────────────────────
+
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      // Any authenticated (non-anonymous) user can append log entries.
+      allow create: if isRealAuth();
+      allow update, delete: if false;
+    }
+
+    // ── /settings ─────────────────────────────────────────────────────────
+
+    match /settings/{settingId} {
+      allow read: if isRealAuth();
+      allow write: if isAdmin();
+    }
+  }
+}

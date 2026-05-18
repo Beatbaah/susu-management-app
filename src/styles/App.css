@@ -1,0 +1,533 @@
+@import "tailwindcss";
+@import "./theme.css";
+@import "./fonts.css";
+
+:root {
+  --radius: 1rem;
+}
+
+body {
+  @apply bg-background text-foreground;
+  font-family: 'Inter', 'Sora', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+code, pre, .mono {
+  font-family: 'DM Mono', monospace;
+}
+
+/* ─── Custom Scrollbar ─── */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(13, 17, 23, 0.12);
+  border-radius: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(13, 17, 23, 0.2);
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* ─── Premium Glass Card ─── */
+.glass-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--glass-shadow, 0 4px 24px rgba(0, 0, 0, 0.1));
+}
+
+
+/* ─── Fade-in animation for page content ─── */
+.page-enter {
+  animation: pageEnter 0.35s ease-out;
+}
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ─── Card hover lift ─── */
+.card-hover {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
+}
+.card-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.22);
+  border-color: color-mix(in srgb, var(--primary) 24%, var(--border));
+}
+
+/* ─── Stat number counter animation ─── */
+.stat-value {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* ─── Smooth progress bar transition ─── */
+.progress-smooth {
+  transition: width 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* ─── Pulse dot for notifications ─── */
+.pulse-dot {
+  animation: pulseDot 2s ease-in-out infinite;
+}
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.3); }
+}
+
+/* ─── Hide scrollbar but keep scroll functionality ─── */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ─── Typography utility classes ─────────────────────────────────────────── */
+/* eyebrow: section headings, stat labels, category tags */
+.eyebrow {
+  font-size: var(--eyebrow-size);       /* 12px min */
+  font-weight: var(--eyebrow-weight);   /* 700 */
+  text-transform: uppercase;
+  letter-spacing: var(--eyebrow-tracking);
+  line-height: 1.4;
+}
+
+/* label: input labels, value sub-labels */
+.label {
+  font-size: var(--label-size);
+  font-weight: var(--label-weight);
+  line-height: 1.5;
+}
+
+/* body: default prose text */
+.body {
+  font-size: var(--body-size);
+  font-weight: var(--body-weight);
+  line-height: 1.6;
+}
+
+/* body-strong: call-out / emphasized body text */
+.body-strong {
+  font-size: var(--body-size);
+  font-weight: var(--body-strong-weight);
+  line-height: 1.6;
+}
+
+/* section-title: h3-level card/section headings */
+.section-title {
+  font-size: var(--section-title-size);
+  font-weight: var(--section-title-weight);
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+}
+
+/* page-title: h1-level screen headings */
+.page-title {
+  font-size: var(--page-title-size);
+  font-weight: var(--page-title-weight);
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+/* ─── Touch-target helper ─── */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ─── Elevation / surface layers ─── */
+/* elevation-1: inline row, subtle hover bg */
+.elevation-1 {
+  background: var(--glass-bg);
+  border: 1px solid var(--border);
+}
+/* elevation-2: standard card */
+.elevation-2 {
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.05));
+}
+/* elevation-3: prominent card */
+.elevation-3 {
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md, 0 2px 6px rgba(0,0,0,0.06), 0 8px 20px rgba(0,0,0,0.06));
+}
+
+/* ─── Tactile card: used on stat/hero cards ─── */
+.card-tactile {
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.04));
+  transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+.card-tactile:hover {
+  box-shadow: var(--shadow-md, 0 2px 6px rgba(0,0,0,0.06), 0 8px 20px rgba(0,0,0,0.06));
+  border-color: color-mix(in srgb, var(--primary) 20%, var(--border));
+  transform: translateY(-1px);
+}
+
+/* ─── App-wide UI normalization ─────────────────────────────────────────── */
+/* Keep every page on the same compact scale as the sidebar/navigation. */
+.page-enter {
+  font-size: 0.875rem;
+}
+
+.page-enter h1,
+.page-enter .text-4xl {
+  font-size: 1.5rem !important;
+  line-height: 1.18 !important;
+  letter-spacing: 0 !important;
+  font-weight: 650 !important;
+}
+
+.page-enter h2,
+.page-enter .text-3xl,
+.page-enter .text-2xl {
+  font-size: 1.25rem !important;
+  line-height: 1.25 !important;
+  letter-spacing: 0 !important;
+  font-weight: 650 !important;
+}
+
+.page-enter h3,
+.page-enter .text-xl {
+  font-size: 1rem !important;
+  line-height: 1.35 !important;
+  letter-spacing: 0 !important;
+  font-weight: 650 !important;
+}
+
+.page-enter h4,
+.page-enter .text-lg,
+.page-enter .text-base {
+  font-size: 0.9375rem !important;
+  line-height: 1.4 !important;
+  letter-spacing: 0 !important;
+}
+
+.page-enter .text-sm {
+  font-size: 0.8125rem !important;
+  line-height: 1.5 !important;
+}
+
+.page-enter .text-xs {
+  font-size: 0.6875rem !important;
+  line-height: 1.45 !important;
+}
+
+.page-enter button,
+.page-enter input,
+.page-enter select,
+.page-enter textarea {
+  letter-spacing: 0 !important;
+}
+
+.page-enter [class*="tracking-tight"],
+.page-enter [class*="tracking-tighter"],
+.page-enter [class*="tracking-["] {
+  letter-spacing: 0 !important;
+}
+
+.page-enter .uppercase {
+  letter-spacing: 0.06em !important;
+}
+
+.page-enter .rounded-\[3rem\],
+.page-enter .rounded-\[2\.5rem\],
+.page-enter .rounded-\[2rem\],
+.page-enter .rounded-3xl {
+  border-radius: 1.25rem !important;
+}
+
+.page-enter .shadow-xl,
+.page-enter .shadow-2xl {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2) !important;
+}
+
+@media (min-width: 641px) {
+  .page-enter > [class*="px-6"]:first-child,
+  .page-enter > [class*="px-10"]:first-child {
+    padding-top: 1.5rem;
+    padding-bottom: 1.25rem;
+  }
+
+  .page-enter .text-4xl {
+    font-size: 1.75rem !important;
+    line-height: 1.15 !important;
+    letter-spacing: 0 !important;
+  }
+
+  .page-enter .text-3xl {
+    font-size: 1.5rem !important;
+    line-height: 1.2 !important;
+    letter-spacing: 0 !important;
+  }
+
+  .page-enter .rounded-\[3rem\],
+  .page-enter .rounded-\[2\.5rem\] {
+    border-radius: 1.25rem !important;
+  }
+}
+
+/* ─── Reduce Motion — disable all decorative animations ─── */
+@media (prefers-reduced-motion: reduce) {
+  .pulse-dot,
+  .page-enter,
+  .progress-smooth,
+  .card-hover {
+    animation: none !important;
+    transition: none !important;
+  }
+  .card-hover:hover {
+    transform: none !important;
+  }
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ─── Mobile Comfort Layer ─── */
+@media (max-width: 640px) {
+  :root {
+    --page-title-size: 1.25rem;
+    --section-title-size: 0.9375rem;
+    --body-size: 0.8125rem;
+    --eyebrow-size: 0.625rem;
+    --eyebrow-tracking: 0.08em;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--background);
+    font-size: 14px;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  main {
+    overscroll-behavior-y: contain;
+  }
+
+  .card-hover:hover {
+    transform: none;
+  }
+
+  .page-enter {
+    animation-duration: 0.22s;
+  }
+
+  .page-title {
+    letter-spacing: -0.01em;
+  }
+
+  .eyebrow {
+    letter-spacing: 0.09em;
+  }
+
+  .pulse-dot {
+    animation-duration: 12s;
+  }
+
+  .touch-target {
+    min-height: 46px;
+    min-width: 46px;
+  }
+
+  /* Mobile UI normalization: keep screens readable without oversized hero type. */
+  /* Include safe-area-inset-bottom so content clears the nav + iPhone home bar. */
+  .page-enter {
+    padding-bottom: max(5.5rem, calc(4.5rem + env(safe-area-inset-bottom, 0px)));
+  }
+
+  .page-enter > [class*="px-6"]:first-child,
+  .page-enter > [class*="px-10"]:first-child {
+    padding-top: 1rem !important;
+    padding-bottom: 0.875rem !important;
+  }
+
+  .page-enter h1,
+  main h1,
+  .page-enter .text-4xl,
+  main .text-4xl,
+  .page-enter .text-3xl {
+    font-size: 1.25rem !important;
+    line-height: 1.25 !important;
+    letter-spacing: 0 !important;
+  }
+
+  .page-enter h2,
+  main h2,
+  .page-enter .text-2xl {
+    font-size: 1.125rem !important;
+    line-height: 1.3 !important;
+    letter-spacing: 0 !important;
+  }
+
+  .page-enter h3,
+  .page-enter h4,
+  main h3,
+  main h4,
+  .page-enter .text-xl,
+  main .text-xl,
+  .page-enter .text-lg,
+  main .text-lg {
+    font-size: 0.95rem !important;
+    line-height: 1.35 !important;
+    letter-spacing: 0 !important;
+  }
+
+  .page-enter p,
+  .page-enter span,
+  .page-enter button {
+    letter-spacing: 0 !important;
+  }
+
+  .page-enter .stat-value,
+  .page-enter [class*="tracking-tighter"],
+  .page-enter [class*="tracking-tight"] {
+    letter-spacing: 0 !important;
+  }
+
+  .page-enter .px-6 {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  main .px-6 {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  .page-enter .pt-10 {
+    padding-top: 1.25rem !important;
+  }
+
+  .page-enter .pb-8 {
+    padding-bottom: 1rem !important;
+  }
+
+  .page-enter .p-8,
+  .page-enter .p-10 {
+    padding: 1rem !important;
+  }
+
+  .page-enter .p-6,
+  .page-enter .p-5 {
+    padding: 1rem !important;
+  }
+
+  main .p-6,
+  main .p-5 {
+    padding: 1rem !important;
+  }
+
+  .page-enter .p-16,
+  .page-enter .p-20 {
+    padding: 2rem 1rem !important;
+  }
+
+  .page-enter .gap-8 {
+    gap: 1rem !important;
+  }
+
+  .page-enter .gap-6,
+  .page-enter .gap-5 {
+    gap: 0.875rem !important;
+  }
+
+  .page-enter .mb-10,
+  .page-enter .mb-8 {
+    margin-bottom: 1.25rem !important;
+  }
+
+  .page-enter .space-y-5 > :not([hidden]) ~ :not([hidden]),
+  .page-enter .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.875rem !important;
+  }
+
+  .page-enter .rounded-\[3rem\],
+  .page-enter .rounded-\[2\.5rem\],
+  .page-enter .rounded-\[2rem\],
+  .page-enter .rounded-3xl,
+  main .rounded-\[3rem\],
+  main .rounded-\[2\.5rem\],
+  main .rounded-\[2rem\],
+  main .rounded-3xl {
+    border-radius: 1rem !important;
+  }
+
+  .page-enter .w-20,
+  .page-enter .h-20 {
+    width: 3rem !important;
+    height: 3rem !important;
+  }
+
+  .page-enter .w-16,
+  .page-enter .h-16,
+  .page-enter .w-14,
+  .page-enter .h-14 {
+    width: 2.75rem !important;
+    height: 2.75rem !important;
+  }
+
+  .page-enter .w-10,
+  .page-enter .h-10,
+  .page-enter .w-9,
+  .page-enter .h-9 {
+    width: 2.25rem !important;
+    height: 2.25rem !important;
+  }
+
+  .page-enter .grid-cols-3 {
+    gap: 0.625rem !important;
+  }
+
+  .page-enter .py-4,
+  .page-enter .py-3\.5 {
+    padding-top: 0.625rem !important;
+    padding-bottom: 0.625rem !important;
+  }
+
+  .page-enter .uppercase {
+    letter-spacing: 0.06em !important;
+  }
+
+  .glass-card {
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  }
+}

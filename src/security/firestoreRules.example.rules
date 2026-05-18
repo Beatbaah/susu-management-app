@@ -1,0 +1,108 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function role() {
+      return request.auth.token.role;
+    }
+
+    function isSuperAdmin() {
+      return signedIn() && role() == 'admin';
+    }
+
+    function isManager() {
+      return signedIn() && (role() == 'admin' || role() == 'manager');
+    }
+
+    function isCollector() {
+      return signedIn() && role() == 'collector';
+    }
+
+    function isMember() {
+      return signedIn() && role() == 'member';
+    }
+
+    function ownsUser(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    // Production note:
+    // Set role custom claims from a trusted backend/Cloud Function only.
+    // Never let the frontend assign request.auth.token.role.
+
+    match /users/{userId} {
+      allow read: if isSuperAdmin() || ownsUser(userId);
+      allow create, update: if isSuperAdmin();
+      allow delete: if false;
+    }
+
+    match /members/{memberId} {
+      allow read: if isManager() || isCollector() || (isMember() && resource.data.userId == request.auth.uid);
+      allow create, update: if isManager();
+      allow delete: if false;
+    }
+
+    match /groups/{groupId} {
+      allow read: if isManager()
+        || isCollector()
+        || (isMember() && request.auth.uid in resource.data.members);
+      allow create, update: if isManager();
+      allow delete: if false;
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isManager()
+        || isCollector()
+        || (isMember() && resource.data.memberUserId == request.auth.uid);
+      allow create: if isManager() || isCollector();
+      allow update: if isManager()
+        && resource.data.status != 'paid';
+      allow delete: if false;
+    }
+
+    match /payouts/{payoutId} {
+      allow read: if isManager()
+        || (isMember() && resource.data.memberUserId == request.auth.uid);
+      allow create, update: if isManager();
+      allow delete: if false;
+    }
+
+    match /receipts/{receiptId} {
+      allow read: if isManager()
+        || (isMember() && resource.data.memberUserId == request.auth.uid);
+      allow create: if isManager();
+      allow update, delete: if false;
+    }
+
+    match /messages/{groupId}/items/{messageId} {
+      allow read: if isManager()
+        || (isMember() && request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members);
+      allow create: if isManager()
+        || (isMember() && request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members);
+      allow update, delete: if false;
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isManager() || resource.data.userId == request.auth.uid;
+      allow create: if isManager();
+      allow update: if resource.data.userId == request.auth.uid || isManager();
+      allow delete: if false;
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if isSuperAdmin();
+      allow create: if signedIn();
+      allow update, delete: if false;
+    }
+
+    match /settings/{settingId} {
+      allow read: if signedIn();
+      allow write: if isSuperAdmin();
+    }
+  }
+}
+

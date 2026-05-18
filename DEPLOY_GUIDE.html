@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Excellent Susu — Firebase Deployment Guide</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600&display=swap');
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#07090f;color:#dde3f0;font-family:'Inter',sans-serif;min-height:100vh;padding:40px 20px;}
+  .wrap{max-width:820px;margin:0 auto;}
+  .hero{text-align:center;padding:40px 0 48px;}
+  .logo{font-family:'Outfit',sans-serif;font-size:32px;font-weight:800;color:#fff;margin-bottom:8px;}
+  .logo em{color:#00d49e;font-style:normal;}
+  .tagline{font-size:14px;color:#4a5e7a;letter-spacing:.05em;}
+  .badge{display:inline-block;background:#00d49e18;color:#00d49e;border:1px solid #00d49e30;border-radius:20px;padding:4px 14px;font-size:12px;font-weight:600;margin-top:12px;}
+  h2{font-family:'Outfit',sans-serif;font-size:20px;font-weight:800;color:#fff;margin:36px 0 14px;display:flex;align-items:center;gap:10px;}
+  h2 .num{width:30px;height:30px;border-radius:50%;background:#00d49e;color:#07090f;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0;}
+  .card{background:#121826;border:1px solid #1b2740;border-radius:14px;padding:22px 24px;margin-bottom:20px;}
+  .step-desc{font-size:13.5px;color:#8fa8c8;line-height:1.7;margin-bottom:14px;}
+  pre{background:#0d1220;border:1px solid #1b2740;border-radius:9px;padding:14px 18px;overflow-x:auto;margin:10px 0;}
+  code{font-family:'JetBrains Mono',monospace;font-size:13px;color:#00d49e;}
+  .cmd{display:flex;align-items:center;gap:10px;background:#0d1220;border:1px solid #1b2740;border-radius:9px;padding:12px 16px;margin:8px 0;}
+  .cmd code{color:#00d49e;flex:1;}
+  .copy-btn{background:#00d49e18;color:#00d49e;border:1px solid #00d49e30;border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:'Inter',sans-serif;font-weight:600;white-space:nowrap;transition:all .15s;}
+  .copy-btn:hover{background:#00d49e;color:#07090f;}
+  .alert{padding:12px 16px;border-radius:9px;font-size:13px;margin-bottom:14px;display:flex;gap:9px;align-items:flex-start;line-height:1.6;}
+  .alert-info{background:#4f8ef716;border:1px solid #4f8ef730;color:#4f8ef7;}
+  .alert-warn{background:#f0b42916;border:1px solid #f0b42930;color:#f0b429;}
+  .alert-success{background:#00d49e16;border:1px solid #00d49e30;color:#00d49e;}
+  .sep{height:1px;background:#1b2740;margin:28px 0;}
+  .file-tree{background:#0d1220;border:1px solid #1b2740;border-radius:9px;padding:16px 20px;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:2;}
+  .ft-folder{color:#f0b429;}
+  .ft-file{color:#dde3f0;}
+  .ft-comment{color:#4a5e7a;}
+  .url-box{background:#00d49e18;border:1px solid #00d49e40;border-radius:10px;padding:16px 20px;text-align:center;margin:16px 0;}
+  .url-box .url{font-family:'JetBrains Mono',monospace;color:#00d49e;font-size:15px;font-weight:600;}
+  .url-box .url-sub{font-size:12px;color:#4a5e7a;margin-top:5px;}
+  .check-list{list-style:none;margin:10px 0;}
+  .check-list li{padding:7px 0;font-size:13.5px;color:#8fa8c8;display:flex;gap:9px;border-bottom:1px solid #1b274040;}
+  .check-list li:last-child{border-bottom:none;}
+  .check-list li::before{content:'☐';font-size:15px;color:#4a5e7a;flex-shrink:0;}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media(max-width:600px){.two-col{grid-template-columns:1fr;}}
+  footer{text-align:center;padding:40px 0 20px;color:#4a5e7a;font-size:12px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hero">
+    <div class="logo"><em>Excellent</em> Susu</div>
+    <div class="tagline">Community Savings &amp; Collections Platform</div>
+    <div class="badge">🚀 Firebase Deployment Guide</div>
+  </div>
+
+  <!-- OVERVIEW -->
+  <div class="card">
+    <div class="alert alert-info">ℹ This guide walks you through deploying your Excellent Susu React app to Firebase Hosting — a free, fast, and secure hosting service by Google.</div>
+    <div style="font-size:13.5px;color:#8fa8c8;line-height:1.8;">
+      After deployment your app will be live at a URL like:<br/>
+      <div class="url-box">
+        <div class="url">https://excellent-susu.web.app</div>
+        <div class="url-sub">or https://excellent-susu.firebaseapp.com</div>
+      </div>
+      You can also connect a custom domain (e.g. <code>excellentsusu.com</code>) for free in the Firebase console.
+    </div>
+  </div>
+
+  <!-- PREREQUISITES -->
+  <h2><span class="num">✓</span> Prerequisites</h2>
+  <div class="card">
+    <div class="step-desc">Make sure you have these installed on your computer before starting:</div>
+    <ul class="check-list">
+      <li><strong>Node.js</strong> (v18+) — download from <code>nodejs.org</code></li>
+      <li><strong>npm</strong> — comes with Node.js automatically</li>
+      <li>A <strong>Google account</strong> — to access Firebase console</li>
+      <li>A <strong>terminal / command prompt</strong> — Terminal on Mac, CMD or PowerShell on Windows</li>
+    </ul>
+    <div class="alert alert-info" style="margin-top:14px;">ℹ Check your Node version by running <code>node --version</code>. It should show v18 or higher.</div>
+  </div>
+
+  <!-- STEP 1 -->
+  <h2><span class="num">1</span> Create a Firebase Project</h2>
+  <div class="card">
+    <div class="step-desc">Go to the Firebase console and create a new project:</div>
+    <ol style="font-size:13.5px;color:#8fa8c8;line-height:2.2;padding-left:20px;">
+      <li>Open your browser and go to <strong style="color:#fff;">console.firebase.google.com</strong></li>
+      <li>Click <strong style="color:#fff;">"Add project"</strong></li>
+      <li>Enter project name: <code>excellent-susu</code></li>
+      <li>Disable Google Analytics (not needed) → Click <strong style="color:#fff;">"Create project"</strong></li>
+      <li>Wait for it to finish → Click <strong style="color:#fff;">"Continue"</strong></li>
+      <li>In the left sidebar, click <strong style="color:#fff;">Hosting</strong> → Click <strong style="color:#fff;">"Get started"</strong></li>
+    </ol>
+  </div>
+
+  <!-- STEP 2 -->
+  <h2><span class="num">2</span> Set Up Your Project Folder</h2>
+  <div class="card">
+    <div class="step-desc">You received a ZIP file with the complete project. Here is what's inside:</div>
+    <div class="file-tree">
+      <span class="ft-folder">excellent-susu/</span><br/>
+      &nbsp;&nbsp;<span class="ft-folder">├── public/</span><br/>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-file">│&nbsp;&nbsp; └── index.html</span><br/>
+      &nbsp;&nbsp;<span class="ft-folder">├── src/</span><br/>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-file">│&nbsp;&nbsp; ├── index.js</span><br/>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-file">│&nbsp;&nbsp; └── App.jsx</span>&nbsp;&nbsp;<span class="ft-comment">← Your full app</span><br/>
+      &nbsp;&nbsp;<span class="ft-file">├── package.json</span><br/>
+      &nbsp;&nbsp;<span class="ft-file">├── firebase.json</span>&nbsp;&nbsp;<span class="ft-comment">← Firebase config</span><br/>
+      &nbsp;&nbsp;<span class="ft-file">├── .firebaserc</span>&nbsp;&nbsp;&nbsp;<span class="ft-comment">← Links to your project</span><br/>
+      &nbsp;&nbsp;<span class="ft-file">└── .gitignore</span>
+    </div>
+    <div class="alert alert-warn" style="margin-top:14px;">⚠ Open the <code>.firebaserc</code> file and replace <code>"excellent-susu"</code> with your actual Firebase Project ID if it's different.</div>
+  </div>
+
+  <!-- STEP 3 -->
+  <h2><span class="num">3</span> Install Firebase CLI</h2>
+  <div class="card">
+    <div class="step-desc">Open your terminal and run this command to install the Firebase tools globally:</div>
+    <div class="cmd">
+      <code>npm install -g firebase-tools</code>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText('npm install -g firebase-tools');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+    </div>
+    <div class="step-desc" style="margin-top:12px;">Then log in to your Google account:</div>
+    <div class="cmd">
+      <code>firebase login</code>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText('firebase login');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+    </div>
+    <div class="alert alert-info" style="margin-top:12px;">ℹ A browser window will open — sign in with the Google account you used for Firebase. Come back to the terminal after.</div>
+  </div>
+
+  <!-- STEP 4 -->
+  <h2><span class="num">4</span> Install App Dependencies</h2>
+  <div class="card">
+    <div class="step-desc">Navigate into your project folder and install React dependencies:</div>
+    <div class="cmd">
+      <code>cd excellent-susu</code>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText('cd excellent-susu');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+    </div>
+    <div class="cmd">
+      <code>npm install</code>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText('npm install');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+    </div>
+    <div class="step-desc" style="margin-top:10px;">This will download all required packages into a <code>node_modules/</code> folder. It may take 1–2 minutes.</div>
+  </div>
+
+  <!-- STEP 5 -->
+  <h2><span class="num">5</span> Build the App</h2>
+  <div class="card">
+    <div class="step-desc">Create a production-optimised build of your app:</div>
+    <div class="cmd">
+      <code>npm run build</code>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText('npm run build');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+    </div>
+    <div class="step-desc" style="margin-top:10px;">This creates a <code>build/</code> folder with compressed, optimised files ready for deployment. You should see a success message like <code>Compiled successfully.</code></div>
+    <div class="alert alert-success" style="margin-top:10px;">✓ If you see warnings, that's fine. Only <strong>errors</strong> (in red) need to be fixed before continuing.</div>
+  </div>
+
+  <!-- STEP 6 -->
+  <h2><span class="num">6</span> Deploy to Firebase</h2>
+  <div class="card">
+    <div class="step-desc">You're ready! Deploy with a single command:</div>
+    <div class="cmd">
+      <code>firebase deploy</code>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText('firebase deploy');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+    </div>
+    <div class="step-desc" style="margin-top:12px;">After a few seconds you'll see output like:</div>
+    <pre><code>✔  Deploy complete!
+
+Project Console: https://console.firebase.google.com/project/excellent-susu
+Hosting URL:     https://excellent-susu.web.app</code></pre>
+    <div class="alert alert-success" style="margin-top:12px;">🎉 Your app is now live! Open the Hosting URL in any browser.</div>
+  </div>
+
+  <div class="sep"/>
+
+  <!-- UPDATES -->
+  <h2><span class="num">↻</span> Updating the App Later</h2>
+  <div class="card">
+    <div class="step-desc">Every time you make changes to your app, just run these two commands again from the project folder:</div>
+    <div class="cmd"><code>npm run build</code><button class="copy-btn" onclick="navigator.clipboard.writeText('npm run build');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button></div>
+    <div class="cmd"><code>firebase deploy</code><button class="copy-btn" onclick="navigator.clipboard.writeText('firebase deploy');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button></div>
+  </div>
+
+  <!-- CUSTOM DOMAIN -->
+  <h2><span class="num">🌐</span> Connect a Custom Domain (Optional)</h2>
+  <div class="card">
+    <div class="step-desc">To use your own domain like <code>excellentsusu.com</code>:</div>
+    <ol style="font-size:13.5px;color:#8fa8c8;line-height:2.4;padding-left:20px;">
+      <li>Go to <strong style="color:#fff;">Firebase Console → Hosting → Add custom domain</strong></li>
+      <li>Enter your domain name</li>
+      <li>Firebase will give you DNS records — add them in your domain registrar (GoDaddy, Namecheap, etc.)</li>
+      <li>Wait up to 24 hours for DNS to propagate</li>
+      <li>Firebase will automatically provision an SSL certificate (HTTPS) for free ✓</li>
+    </ol>
+  </div>
+
+  <!-- TROUBLESHOOTING -->
+  <h2><span class="num">⚠</span> Common Issues</h2>
+  <div class="two-col">
+    <div class="card">
+      <div style="font-weight:700;color:#f0b429;margin-bottom:8px;font-size:13px;">❌ "firebase: command not found"</div>
+      <div style="font-size:12.5px;color:#8fa8c8;line-height:1.7;">Run <code>npm install -g firebase-tools</code> again. On Mac you may need to prefix with <code>sudo</code>.</div>
+    </div>
+    <div class="card">
+      <div style="font-weight:700;color:#f0b429;margin-bottom:8px;font-size:13px;">❌ Build fails with errors</div>
+      <div style="font-size:12.5px;color:#8fa8c8;line-height:1.7;">Read the red error message carefully. Most common fix: make sure you ran <code>npm install</code> first.</div>
+    </div>
+    <div class="card">
+      <div style="font-weight:700;color:#f0b429;margin-bottom:8px;font-size:13px;">❌ Wrong project deployed</div>
+      <div style="font-size:12.5px;color:#8fa8c8;line-height:1.7;">Open <code>.firebaserc</code> and confirm the project ID matches exactly what's in your Firebase console.</div>
+    </div>
+    <div class="card">
+      <div style="font-weight:700;color:#f0b429;margin-bottom:8px;font-size:13px;">❌ App shows blank page</div>
+      <div style="font-size:12.5px;color:#8fa8c8;line-height:1.7;">Open browser DevTools (F12) → Console tab and check for errors. Most often a missing file or import issue.</div>
+    </div>
+  </div>
+
+  <!-- SUMMARY -->
+  <div class="card" style="margin-top:10px;border-color:#00d49e30;">
+    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;color:#00d49e;margin-bottom:12px;">🚀 Quick Deploy Checklist</div>
+    <ul class="check-list">
+      <li>Firebase project created at console.firebase.google.com</li>
+      <li>Hosting enabled in the Firebase console</li>
+      <li>Project ID in <code>.firebaserc</code> matches your Firebase project</li>
+      <li><code>npm install -g firebase-tools</code> done</li>
+      <li><code>firebase login</code> done</li>
+      <li><code>npm install</code> inside project folder done</li>
+      <li><code>npm run build</code> completed successfully</li>
+      <li><code>firebase deploy</code> — app is live! 🎉</li>
+    </ul>
+  </div>
+
+  <footer>Excellent Susu · Community Savings Platform · Ghana · Deployment Guide</footer>
+</div>
+</body>
+</html>
