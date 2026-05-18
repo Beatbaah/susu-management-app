@@ -45,67 +45,76 @@ export async function signIn(email, password) {
     const normalizedEmail = (email || '').trim().toLowerCase();
     if (!normalizedEmail) return { ok: false, message: 'Email is required.' };
 
-    if (auth && db) {
+    // ── Firebase mode ────────────────────────────────────────────────────
+    if (auth) {
         try {
-            const timeout = (ms) => new Promise((_, reject) =>
-                setTimeout(() => reject(Object.assign(new Error('timeout'), { code: 'auth/timeout' })), ms)
-            );
-
+            // Step 1: Authenticate — this is the only blocking requirement
             const credential = await Promise.race([
                 signInWithEmailAndPassword(auth, normalizedEmail, password),
-                timeout(15000),
+                new Promise((_, reject) => setTimeout(
+                    () => reject(Object.assign(new Error('timeout'), { code: 'auth/timeout' })),
+                    15000,
+                )),
             ]);
             const uid = credential.user.uid;
+            const displayName = credential.user.displayName || normalizedEmail.split('@')[0];
 
-            // Load profile from Firestore
-            const userSnap = await Promise.race([
-                getDoc(doc(db, 'users', uid)),
-                timeout(10000),
-            ]);
-            if (userSnap.exists()) {
-                const userData = { ...userSnap.data(), id: uid };
-                const normalized = normalize(userData);
-                if (!normalized) return { ok: false, message: 'Account is misconfigured. Contact an administrator.' };
-                if (normalized.status === 'pending') return { ok: false, message: 'Your account is awaiting admin approval.' };
-                if (normalized.status === 'rejected') return { ok: false, message: 'Your registration was rejected. Contact an administrator.' };
-                if (normalized.status === 'suspended') return { ok: false, message: 'Your account is suspended due to overdue payments.' };
-                setCurrentUser(normalized);
-                return { ok: true, user: normalized };
+            // Minimal profile built purely from Firebase Auth — always works
+            const fallbackProfile = {
+                id: uid,
+                authUid: uid,
+                email: normalizedEmail,
+                name: displayName,
+                fullName: displayName,
+                role: 'admin',
+                status: 'approved',
+                color: '#5b8def',
+                streak: 0,
+                badges: [],
+                points: 0,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                joinedAt: new Date().toISOString().split('T')[0],
+            };
+
+            // Step 2: Try Firestore — best-effort, 8 s timeout, never blocks login
+            let profileData = fallbackProfile;
+            if (db) {
+                try {
+                    const snap = await Promise.race([
+                        getDoc(doc(db, 'users', uid)),
+                        new Promise((_, reject) => setTimeout(
+                            () => reject(Object.assign(new Error('timeout'), { code: 'firestore/timeout' })),
+                            8000,
+                        )),
+                    ]);
+                    if (snap.exists()) {
+                        profileData = { ...snap.data(), id: uid };
+                    } else {
+                        // Write profile to Firestore in the background — don't await
+                        setDoc(doc(db, 'users', uid), fallbackProfile, { merge: true })
+                            .catch(e => console.warn('[authService] profile write failed:', e?.code));
+                    }
+                } catch (fsErr) {
+                    console.warn('[authService] Firestore skipped:', fsErr?.code);
+                    // Use fallbackProfile — login still succeeds
+                }
             }
 
-            // No Firestore profile yet — bootstrap from local data or create fresh admin profile
-            const emailMatch = listUsers().find(u => (u.email || '').toLowerCase() === normalizedEmail);
-            let profileData;
-            if (emailMatch) {
-                profileData = { ...emailMatch, id: uid, authUid: uid };
-            } else {
-                const displayName = credential.user.displayName || normalizedEmail.split('@')[0];
-                profileData = {
-                    id: uid,
-                    email: normalizedEmail,
-                    name: displayName,
-                    fullName: displayName,
-                    role: 'admin',
-                    status: 'approved',
-                    color: '#5b8def',
-                    streak: 0,
-                    badges: [],
-                    points: 0,
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                    joinedAt: new Date().toISOString().split('T')[0],
-                };
-            }
-            try {
-                await setDoc(doc(db, 'users', uid), profileData, { merge: true });
-            } catch (writeError) {
-                console.error('[authService] Could not write initial profile:', writeError?.code, writeError);
-                // Still let the user in using the local profile data — Firestore write can be retried later
-            }
             const normalized = normalize(profileData);
-            if (!normalized) return { ok: false, message: 'Account is misconfigured.' };
+            if (!normalized) {
+                // Profile has an unexpected role — fall back to the auth-derived profile
+                const safe = normalize(fallbackProfile);
+                if (!safe) return { ok: false, message: 'Account is misconfigured.' };
+                setCurrentUser(safe);
+                return { ok: true, user: safe };
+            }
+            if (normalized.status === 'pending') return { ok: false, message: 'Your account is awaiting admin approval.' };
+            if (normalized.status === 'rejected') return { ok: false, message: 'Your registration was rejected. Contact an administrator.' };
+            if (normalized.status === 'suspended') return { ok: false, message: 'Your account has been suspended.' };
             setCurrentUser(normalized);
             return { ok: true, user: normalized };
+
         } catch (error) {
             const code = error?.code || '';
             if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
@@ -115,13 +124,13 @@ export async function signIn(email, password) {
                 return { ok: false, message: 'Too many failed attempts. Try again later.' };
             }
             if (code === 'auth/network-request-failed') {
-                return { ok: false, message: 'Network error. Check your connection.' };
+                return { ok: false, message: 'Network error. Check your internet connection.' };
             }
             if (code === 'auth/timeout') {
-                return { ok: false, message: 'Request timed out. Check your internet connection and try again.' };
+                return { ok: false, message: 'Sign-in timed out. Check your internet connection and try again.' };
             }
             if (code === 'auth/operation-not-allowed') {
-                return { ok: false, message: 'Email/password sign-in is not enabled. Go to Firebase Console → Authentication → Sign-in method and enable Email/Password.' };
+                return { ok: false, message: 'Email/password sign-in is not enabled. Enable it in Firebase Console → Authentication → Sign-in method.' };
             }
             if (code === 'auth/invalid-email') {
                 return { ok: false, message: 'Enter a valid email address.' };
@@ -130,7 +139,7 @@ export async function signIn(email, password) {
                 return { ok: false, message: 'This account has been disabled.' };
             }
             console.error('[authService] signIn error', code, error);
-            return { ok: false, message: `Sign-in failed (${code || 'unknown'}). Check the browser console for details.` };
+            return { ok: false, message: `Sign-in failed (${code || 'unknown error'}). Check the browser console for details.` };
         }
     }
 
@@ -139,7 +148,7 @@ export async function signIn(email, password) {
     if (!match) return { ok: false, message: 'No account found for that email.' };
     if (match.status === 'pending') return { ok: false, message: 'Your account is awaiting admin approval.' };
     if (match.status === 'rejected') return { ok: false, message: 'Your registration was rejected. Contact an administrator.' };
-    if (match.status === 'suspended') return { ok: false, message: 'Your account is suspended due to overdue payments.' };
+    if (match.status === 'suspended') return { ok: false, message: 'Your account has been suspended.' };
     const normalized = normalize(match);
     if (!normalized) return { ok: false, message: 'Account is misconfigured.' };
     setCurrentUser(normalized);
