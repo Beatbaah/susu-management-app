@@ -30,6 +30,8 @@ import { signOut as signOutUser } from "./services/authService";
 import { mobileNavHidden } from "./services/uiBus";
 // Context
 import { useAppContext } from "./context/AppContext";
+import { useSessionTimeout } from "./hooks/useSessionTimeout";
+import { SessionTimeoutModal } from "./components/SessionTimeoutModal";
 export default function App() {
     const { authUser, setAuthUser, users, payments, groups, reminders, settings, dismissedNotifications, registerMember, logAudit } = useAppContext();
     const [page, setPage] = useState("dashboard");
@@ -59,6 +61,20 @@ export default function App() {
     const [globalSearch, setGlobalSearch] = useState("");
     const [isOffline, setIsOffline] = useState(typeof navigator !== "undefined" ? !navigator.onLine : false);
     const lastMainScrollY = useRef(0);
+
+    const handleLogout = async () => {
+        logAudit?.({ action: "logout", targetType: "user", targetId: authUser?.id });
+        await signOutUser();
+        setAuthUser(null);
+        setPage("dashboard");
+        setSidebarOpen(false);
+    };
+
+    const { showWarning, remainingSeconds, extend } = useSessionTimeout({
+        enabled: !!authUser,
+        onExpire: handleLogout,
+    });
+
     // Decide which page best answers a global search query.
     const resolveGlobalSearchPage = (q) => {
         const term = q.trim().toLowerCase();
@@ -143,13 +159,6 @@ export default function App() {
         })();
         return <RoleGuard page={effectivePage}>{inner}</RoleGuard>;
     };
-    const handleLogout = async () => {
-        logAudit?.({ action: "logout", targetType: "user", targetId: authUser.id });
-        await signOutUser();
-        setAuthUser(null);
-        setPage("dashboard");
-        setSidebarOpen(false);
-    };
     return (<div className="flex h-[100dvh] w-full bg-background overflow-hidden">
         <Sidebar activePage={effectivePage} onNavigate={(p) => setPage(p)} user={authUser} onLogout={handleLogout} className="hidden md:flex"/>
 
@@ -207,6 +216,14 @@ export default function App() {
         })()}
 
         {notificationsOpen && (<NotificationsPanel onClose={() => setNotificationsOpen(false)} onNavigate={setPage}/>)}
+
+        {showWarning && (
+          <SessionTimeoutModal
+            remainingSeconds={remainingSeconds}
+            onExtend={extend}
+            onLogout={handleLogout}
+          />
+        )}
       </div>);
 }
 /** Branded fallback shown while a lazy page chunk is loading. */
