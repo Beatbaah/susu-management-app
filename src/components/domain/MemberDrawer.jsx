@@ -1,4 +1,4 @@
-import { X, CheckCircle, XCircle, Users, Phone, MapPin, CreditCard, Banknote, Calendar, FileCheck, FileX, Award, Sparkles, Trophy, Mail, Shield, Pencil, } from 'lucide-react';
+import { X, CheckCircle, XCircle, Users, Phone, MapPin, CreditCard, Banknote, Calendar, FileCheck, FileX, Award, Sparkles, Trophy, Mail, Shield, Pencil, Save, } from 'lucide-react';
 import { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { fmt } from '../../utils/helpers';
@@ -17,14 +17,39 @@ const roleTone = {
     member: 'bg-success/10 text-success border-success/20',
 };
 export function MemberDrawer({ user, onClose, onEdit }) {
-    const { authUser, groups, payments, approveUser, rejectUser } = useAppContext();
+    const { authUser, groups, payments, approveUser, rejectUser, updateMember } = useAppContext();
     const [assignOpen, setAssignOpen] = useState(false);
+    const [editMode, setEditMode] = useState(false);
+    const [editDraft, setEditDraft] = useState({
+        fullName: user.fullName || user.name || '',
+        phone: user.phone || '',
+        address: user.address || '',
+        bankMomo: user.bankMomo || '',
+        ghanaCard: user.ghanaCard || '',
+    });
+    const [editError, setEditError] = useState(null);
     const myGroup = groups.find(g => g.id === user.groupId);
     const myPayments = payments.filter(p => (p.memberId || p.userId) === user.id);
     const canManage = authUser && ['admin', 'manager'].includes(authUser.role);
+    const canEdit = authUser?.id === user.id || canManage;
     const fullName = user.fullName || user.name || 'Member';
     const initials = fullName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
     const isStaff = ['admin', 'manager', 'collector'].includes(user.role);
+
+    const handleSave = () => {
+        if (!editDraft.fullName.trim()) { setEditError('Name is required.'); return; }
+        updateMember(user.id, {
+            fullName: editDraft.fullName.trim(),
+            name: editDraft.fullName.trim(),
+            phone: editDraft.phone.trim(),
+            address: editDraft.address.trim(),
+            bankMomo: editDraft.bankMomo.trim(),
+            ghanaCard: editDraft.ghanaCard.trim(),
+        });
+        toast.success('Profile updated');
+        setEditMode(false);
+        setEditError(null);
+    };
     const docs = [
         ['Ghana Card · Front', user.ghanaCardFront],
         ['Ghana Card · Back', user.ghanaCardBack],
@@ -41,10 +66,17 @@ export function MemberDrawer({ user, onClose, onEdit }) {
         <div className="relative bg-card border border-border w-full sm:max-w-md max-h-[95vh] sm:rounded-3xl rounded-t-3xl shadow-[0_-20px_60px_rgba(0,0,0,0.6)] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
           {/* Floating action buttons — positioned relative to the modal card */}
           <div className="absolute top-3 right-3 z-20 flex items-center gap-2">
-            {onEdit && canManage && (<button type="button" onClick={onEdit} aria-label="Edit member" className="w-9 h-9 rounded-full bg-black/30 hover:bg-black/50 text-foreground flex items-center justify-center backdrop-blur-md transition-colors">
+            {canEdit && !editMode && (
+              <button type="button" onClick={() => { setEditDraft({ fullName: user.fullName || user.name || '', phone: user.phone || '', address: user.address || '', bankMomo: user.bankMomo || '', ghanaCard: user.ghanaCard || '' }); setEditError(null); setEditMode(true); }} aria-label="Edit profile" className="w-9 h-9 rounded-full bg-black/30 hover:bg-black/50 text-foreground flex items-center justify-center backdrop-blur-md transition-colors">
                 <Pencil className="w-4 h-4"/>
-              </button>)}
-            <button type="button" onClick={onClose} aria-label="Close" className="w-9 h-9 rounded-full bg-black/30 hover:bg-black/50 text-foreground flex items-center justify-center backdrop-blur-md transition-colors">
+              </button>
+            )}
+            {editMode && (
+              <button type="button" onClick={handleSave} aria-label="Save profile" className="w-9 h-9 rounded-full bg-primary/80 hover:bg-primary text-primary-foreground flex items-center justify-center backdrop-blur-md transition-colors">
+                <Save className="w-4 h-4"/>
+              </button>
+            )}
+            <button type="button" onClick={editMode ? () => setEditMode(false) : onClose} aria-label={editMode ? 'Cancel edit' : 'Close'} className="w-9 h-9 rounded-full bg-black/30 hover:bg-black/50 text-foreground flex items-center justify-center backdrop-blur-md transition-colors">
               <X className="w-4 h-4"/>
             </button>
           </div>
@@ -119,7 +151,7 @@ export function MemberDrawer({ user, onClose, onEdit }) {
                   </button>
                 </div>
               </div>)}
-            {canManage && user.status === 'approved' && !user.groupId && (<div className="px-6 mb-5">
+            {canManage && user.role === 'member' && user.status === 'approved' && !user.groupId && (<div className="px-6 mb-5">
                 <button type="button" onClick={() => setAssignOpen(true)} className="w-full bg-primary text-primary-foreground py-3 rounded-2xl flex items-center justify-center gap-2 font-bold shadow-lg shadow-primary/20">
                   <Users className="w-4 h-4"/>
                   Assign to Group
@@ -128,12 +160,29 @@ export function MemberDrawer({ user, onClose, onEdit }) {
 
             {/* SECTIONS */}
             <div className="px-6 pb-8 space-y-5">
-              <Section title="Personal info">
-                <InfoRow icon={CreditCard} label="Ghana Card" value={user.ghanaCard || '—'}/>
-                <InfoRow icon={Phone} label="Phone" value={user.phone || '—'}/>
-                <InfoRow icon={MapPin} label="Address" value={user.address || '—'}/>
-                <InfoRow icon={Banknote} label="Bank / MoMo" value={user.bankMomo || '—'}/>
-                <InfoRow icon={Calendar} label="Joined" value={user.joinedAt || '—'} last/>
+              <Section title="Personal info" meta={editMode ? 'Editing' : undefined} metaTone="text-primary">
+                {editMode ? (
+                  <div className="p-4 space-y-3">
+                    <EditField label="Full name" value={editDraft.fullName} onChange={v => setEditDraft(d => ({ ...d, fullName: v }))} placeholder="e.g. Ama Serwaa"/>
+                    <EditField label="Phone" value={editDraft.phone} onChange={v => setEditDraft(d => ({ ...d, phone: v }))} placeholder="e.g. 0244123456" type="tel"/>
+                    <EditField label="Address" value={editDraft.address} onChange={v => setEditDraft(d => ({ ...d, address: v }))} placeholder="e.g. Accra, Ghana"/>
+                    <EditField label="Bank / MoMo" value={editDraft.bankMomo} onChange={v => setEditDraft(d => ({ ...d, bankMomo: v }))} placeholder="e.g. MTN 0244123456"/>
+                    <EditField label="Ghana Card" value={editDraft.ghanaCard} onChange={v => setEditDraft(d => ({ ...d, ghanaCard: v }))} placeholder="e.g. GHA-XXXXXXXXX-X"/>
+                    {editError && <p className="text-destructive text-xs font-semibold pt-1">{editError}</p>}
+                    <div className="flex gap-2 pt-1">
+                      <button type="button" onClick={() => setEditMode(false)} className="flex-1 py-2.5 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:bg-accent transition-colors">Cancel</button>
+                      <button type="button" onClick={handleSave} className="flex-[1.5] py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 active:scale-95 transition-all">Save changes</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <InfoRow icon={CreditCard} label="Ghana Card" value={user.ghanaCard || '—'}/>
+                    <InfoRow icon={Phone} label="Phone" value={user.phone || '—'}/>
+                    <InfoRow icon={MapPin} label="Address" value={user.address || '—'}/>
+                    <InfoRow icon={Banknote} label="Bank / MoMo" value={user.bankMomo || '—'}/>
+                    <InfoRow icon={Calendar} label="Joined" value={user.joinedAt || '—'} last/>
+                  </>
+                )}
               </Section>
 
               <Section title="Documents" meta={`${uploadedDocs}/${docs.length} uploaded`} metaTone={uploadedDocs === docs.length ? 'text-success' : 'text-muted-foreground'}>
@@ -235,6 +284,20 @@ function InfoRow({ icon: Icon, label, value, last, }) {
         <p className="text-foreground text-sm truncate mt-0.5">{value}</p>
       </div>
     </div>);
+}
+function EditField({ label, value, onChange, placeholder, type = 'text' }) {
+    return (
+        <div>
+          <p className="text-muted-foreground text-xs uppercase tracking-wider font-bold mb-1">{label}</p>
+          <input
+            type={type}
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            placeholder={placeholder}
+            className="w-full bg-background border border-border rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all"
+          />
+        </div>
+    );
 }
 function StatTile({ icon: Icon, label, value, accent = 'text-foreground', }) {
     return (<div className="rounded-2xl border border-border bg-input-background p-3 text-center">

@@ -6,13 +6,19 @@
   --radius: 1rem;
 }
 
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   @apply bg-background text-foreground;
   font-family: 'Inter', 'Sora', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  overflow-x: hidden;
+  height: 100%;
+  overflow: hidden;
 }
 
 code, pre, .mono {
