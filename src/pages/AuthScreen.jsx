@@ -369,8 +369,8 @@ export default function AuthScreen({ onLogin, onRegister, registrationGroups = [
 
                 {/* Logo + heading */}
                 <div className="text-center mb-7 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                    <div className="relative inline-flex items-center justify-center w-[5rem] h-[5rem] rounded-[1.5rem] bg-white mb-5 border-2 border-white/20 shadow-[0_4px_24px_rgba(7,61,127,0.18),0_1px_6px_rgba(7,61,127,0.10)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.50)] p-2.5 overflow-hidden">
-                        <img src="/logo512.png" alt="Excellent Susu" className="w-full h-full object-contain rounded-xl"/>
+                    <div className="relative inline-flex items-center justify-center w-[5rem] h-[5rem] rounded-[1.5rem] mb-5 border-2 border-white/20 shadow-[0_4px_24px_rgba(7,61,127,0.18),0_1px_6px_rgba(7,61,127,0.10)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.50)] overflow-hidden">
+                        <img src="/logo.jpg" alt="Excellent Susu" className="w-full h-full object-cover"/>
                         <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-success border-2 border-background" aria-hidden/>
                     </div>
                     <h1 className="text-[1.75rem] font-bold tracking-tight text-foreground leading-tight">
