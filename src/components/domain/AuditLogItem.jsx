@@ -36,7 +36,7 @@ export function AuditLogItem({ category, severity, actionLabel, details, actorNa
           <div className="flex flex-wrap gap-2 text-xs">
             <span className="px-2 py-1 bg-background/50 rounded">{actorName}</span>
             <span className="px-2 py-1 bg-background/50 rounded">{actorRole}</span>
-            <span className="px-2 py-1 bg-background/50 rounded">{category}</span>
+            <span className="px-2 py-1 bg-background/50 rounded">{category.charAt(0).toUpperCase() + category.slice(1)}</span>
           </div>
         </div>
       </div>

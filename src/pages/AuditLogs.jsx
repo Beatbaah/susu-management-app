@@ -44,7 +44,9 @@ export function AuditLogs() {
                 ? `Amount ${log.newValue.amount}`
                 : log.newValue?.fullName || log.newValue?.name
                     ? `${log.newValue.fullName || log.newValue.name}`
-                    : `Target ${log.targetType}:${log.targetId || '—'}`;
+                    : log.targetType
+                        ? `${log.targetType.charAt(0).toUpperCase() + log.targetType.slice(1)} action`
+                        : 'System event';
         return {
             ...log,
             categoryComputed: category,
@@ -145,7 +147,7 @@ export function AuditLogs() {
         </div>
 
         {/* Category filter */}
-        <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1 mb-2">
+        <div className="flex flex-wrap gap-1.5 pb-1 mb-2">
           {['all', 'payment', 'payout', 'user', 'security', 'group', 'reminder'].map(cat => (
             <button key={cat} type="button" onClick={() => setFilterCategory(cat)}
               className={`flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-bold transition-colors border ${filterCategory === cat ? 'bg-primary/15 text-primary border-primary/30' : 'bg-card text-muted-foreground border-border hover:text-foreground'}`}>

@@ -161,24 +161,28 @@ export function Dashboard({ user, onNavigate }) {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto flex-wrap">
-          <div className="flex rounded-lg border border-border bg-card/70 p-0.5 flex-1 sm:flex-none">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto flex-shrink-0">
+          {/* Time filters — full width on mobile */}
+          <div className="flex rounded-lg border border-border bg-card/70 p-0.5 w-full sm:w-auto">
             {TIME_FILTERS.map(f => (
               <button key={f.id} type="button" onClick={() => setTimeFilter(f.id)}
-                className={cn('px-2.5 py-1 rounded-md app-tab whitespace-nowrap transition-colors text-xs',
+                className={cn('flex-1 sm:flex-none px-2.5 py-1 rounded-md app-tab whitespace-nowrap transition-colors text-xs',
                   timeFilter === f.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50')}>
                 {f.label}
               </button>
             ))}
           </div>
-          <button onClick={() => onNavigate?.('payments')} className={cn('h-9 px-3.5 rounded-lg app-control', 'flex items-center justify-center gap-1.5', 'bg-accent border border-border', 'hover:bg-accent/80 transition-colors duration-150', 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60')}>
-            <History className="w-3.5 h-3.5 text-primary"/>
-            <span>Activity</span>
-          </button>
-          <button onClick={() => onNavigate?.('analytics')} className={cn('h-9 px-3.5 rounded-lg app-control', 'flex items-center justify-center gap-1.5', 'bg-primary text-primary-foreground', 'hover:opacity-90 active:scale-95 transition-all duration-150', 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60')}>
-            <Zap className="w-3.5 h-3.5"/>
-            <span>Reports</span>
-          </button>
+          {/* Action buttons — sit beside filters on desktop, below on mobile */}
+          <div className="flex gap-2">
+            <button onClick={() => onNavigate?.('payments')} className={cn('flex-1 sm:flex-none h-9 px-3.5 rounded-lg app-control', 'flex items-center justify-center gap-1.5', 'bg-accent border border-border', 'hover:bg-accent/80 transition-colors duration-150', 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60')}>
+              <History className="w-3.5 h-3.5 text-primary"/>
+              <span>Activity</span>
+            </button>
+            <button onClick={() => onNavigate?.('analytics')} className={cn('flex-1 sm:flex-none h-9 px-3.5 rounded-lg app-control', 'flex items-center justify-center gap-1.5', 'bg-primary text-primary-foreground', 'hover:opacity-90 active:scale-95 transition-all duration-150', 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60')}>
+              <Zap className="w-3.5 h-3.5"/>
+              <span>Reports</span>
+            </button>
+          </div>
         </div>
       </div>
 
