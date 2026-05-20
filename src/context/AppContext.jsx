@@ -301,7 +301,7 @@ export const AppProvider = ({ children }) => {
             window.clearTimeout(timeoutId);
             subs.forEach(u => u());
         };
-    }, [authUser?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [authUser?.id, authUser?.role]); // eslint-disable-line react-hooks/exhaustive-deps
     const setAuthUser = (next) => {
         setAuthUserState((prev) => setCurrentUser(typeof next === 'function' ? next(prev) : next));
     };
