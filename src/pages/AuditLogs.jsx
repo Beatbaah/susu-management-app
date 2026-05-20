@@ -60,10 +60,10 @@ function FilterSheet({ open, onClose, severity, category, days, onApply }) {
     if (!open) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-card rounded-t-[2rem] border-t border-x border-border w-full max-w-lg shadow-2xl animate-in slide-in-from-bottom duration-300"
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+            <div className="bg-card rounded-t-[2rem] sm:rounded-2xl border-t sm:border border-x border-border w-full max-w-lg shadow-2xl animate-in slide-in-from-bottom sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300"
                 onClick={e => e.stopPropagation()}>
-                <div className="w-9 h-[3px] rounded-full bg-border mx-auto mt-3 mb-1"/>
+                <div className="w-9 h-[3px] rounded-full bg-border mx-auto mt-3 mb-1 sm:hidden"/>
                 <div className="flex items-center justify-between px-5 py-3 border-b border-border">
                     <h3 className="text-base font-bold">Filter logs</h3>
                     <button type="button" onClick={onClose} className="p-1.5 rounded-xl hover:bg-muted/50 transition-colors">
@@ -98,7 +98,7 @@ function FilterSheet({ open, onClose, severity, category, days, onApply }) {
                     </div>
                 </div>
 
-                <div className="flex gap-3 px-5 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]">
+                <div className="flex gap-3 px-5 pt-3 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] sm:pb-5">
                     <button type="button" onClick={() => { setTmpSev('all'); setTmpCat('all'); setTmpDays(null); }}
                         className="flex-1 py-3 rounded-2xl border border-border text-sm font-semibold text-muted-foreground hover:bg-muted/50 transition-colors">
                         Clear all
