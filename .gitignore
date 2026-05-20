@@ -1,4 +1,6 @@
 node_modules/
+# Generated at build time from env vars — never commit
+public/firebase-messaging-sw.js
 build/
 dist/
 .env
