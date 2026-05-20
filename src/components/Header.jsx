@@ -20,8 +20,8 @@ export function Header({ user, title, onOpenSidebar, notificationCount = 0, onNo
           </button>
 
           {/* Mobile logo pill */}
-          <div className="w-7 h-7 rounded-full border border-border bg-card flex items-center justify-center md:hidden flex-shrink-0 overflow-hidden">
-            <img src="/logo512.png" alt="Excellent Susu" className="w-6 h-6 object-contain"/>
+          <div className="w-8 h-8 rounded-full border border-border bg-white flex items-center justify-center md:hidden flex-shrink-0 overflow-hidden">
+            <img src="/logo.jpg" alt="Excellent Susu" className="w-8 h-8 object-cover"/>
           </div>
 
           {/* Page title */}

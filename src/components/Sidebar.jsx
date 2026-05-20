@@ -59,8 +59,8 @@ export function Sidebar({ activePage, onNavigate, user, onLogout, className }) {
         {/* ── Brand ── */}
         <div className="px-5 pt-[env(safe-area-inset-top,22px)] pb-5" style={{ paddingTop: 'max(22px, env(safe-area-inset-top))' }}>
           <button type="button" onClick={() => onNavigate('dashboard')} className="flex items-center gap-3 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-xl p-1 -m-1" aria-label="Go to dashboard">
-            <div className="w-9 h-9 rounded-xl border border-sidebar-border bg-sidebar-accent/40 flex items-center justify-center flex-shrink-0 overflow-hidden">
-              <img src="/logo512.png" alt="Excellent Susu" className="w-7 h-7 object-contain rounded-lg"/>
+            <div className="w-9 h-9 rounded-xl border border-sidebar-border bg-white flex items-center justify-center flex-shrink-0 overflow-hidden">
+              <img src="/logo.jpg" alt="Excellent Susu" className="w-9 h-9 object-cover"/>
             </div>
             <div className="leading-none">
               <p className="text-[14px] font-semibold text-sidebar-foreground tracking-tight leading-snug">Excellent</p>
