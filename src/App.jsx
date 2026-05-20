@@ -195,7 +195,7 @@ export default function App() {
                 setPage(target);
         }} searchValue={globalSearch} searchPlaceholder="Search members, payments, groups…"/>
 
-          <main className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth" onScroll={handleMainScroll}>
+          <main className="flex-1 overflow-y-auto scroll-smooth" onScroll={handleMainScroll}>
               {isOffline && (<div role="status" aria-live="polite" className="bg-destructive/10 text-destructive px-6 md:px-10 py-3 text-xs font-semibold flex items-center gap-2 border-b border-destructive/20 uppercase tracking-wide">
                   <ShieldAlert className="w-4 h-4 flex-shrink-0" aria-hidden="true"/>
                   <span>No internet connection — working offline</span>

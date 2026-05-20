@@ -93,75 +93,76 @@ export function AuditLogs() {
         URL.revokeObjectURL(url);
     };
     return (<div className="pb-[calc(7rem+env(safe-area-inset-bottom,0px))] page-enter">
-      <div className="px-4 sm:px-6 pt-5 sm:pt-6 pb-4">
-        <div className="flex items-start justify-between mb-4 sm:mb-6">
+      <div className="px-4 sm:px-6 pt-5 sm:pt-6 pb-3">
+        <div className="flex items-start justify-between mb-3 sm:mb-5">
           <div>
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-1.5">
               <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-primary/20 flex items-center justify-center">
                 <History className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary"/>
               </div>
               <p className="eyebrow text-muted-foreground">Activity Trail</p>
             </div>
-            <h1 className="text-2xl font-bold text-foreground mb-1">Audit Logs</h1>
-            <p className="text-muted-foreground text-sm">Full record of all system actions and events.</p>
+            <h1 className="text-2xl font-bold text-foreground">Audit Logs</h1>
+            <p className="hidden sm:block text-muted-foreground text-sm mt-1">Full record of all system actions and events.</p>
           </div>
           {filtered.length > 0 && (
             <button type="button" onClick={handleExportCSV} title="Export CSV"
-              className="mt-1 w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-card border border-border flex items-center justify-center hover:bg-muted transition-colors flex-shrink-0">
+              className="mt-1 w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-card border border-border flex items-center justify-center hover:bg-muted transition-colors flex-shrink-0">
               <Download className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground"/>
             </button>
           )}
         </div>
 
-        <div className="relative mb-4">
+        <div className="relative mb-3">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground"/>
-          <input type="text" placeholder="Search audit logs..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full h-11 pl-9 pr-4 bg-card rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/40 text-sm text-foreground placeholder:text-muted-foreground/55 transition-all"/>
+          <input type="text" placeholder="Search audit logs..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full h-10 pl-9 pr-4 bg-card rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/40 text-sm text-foreground placeholder:text-muted-foreground/55 transition-all"/>
         </div>
 
-        <div className="grid grid-cols-4 overflow-hidden rounded-xl border border-border bg-card/70 mb-4">
-          <div className="min-w-0 px-2.5 py-2 border-r border-border">
+        <div className="grid grid-cols-4 overflow-hidden rounded-xl border border-border bg-card/70 mb-3">
+          <div className="min-w-0 px-2 py-2 border-r border-border">
             <p className="app-value">{counts.total}</p>
-            <p className="app-caption text-muted-foreground mt-1.5 truncate">Total</p>
+            <p className="app-caption text-muted-foreground mt-1 truncate">Total</p>
           </div>
-          <div className="min-w-0 px-2.5 py-2 border-r border-border">
+          <div className="min-w-0 px-2 py-2 border-r border-border">
             <p className="app-value text-destructive">{counts.critical}</p>
-            <p className="app-caption text-muted-foreground mt-1.5 truncate">Critical</p>
+            <p className="app-caption text-muted-foreground mt-1 truncate">Critical</p>
           </div>
-          <div className="min-w-0 px-2.5 py-2 border-r border-border">
+          <div className="min-w-0 px-2 py-2 border-r border-border">
             <p className="app-value text-primary">{counts.warning}</p>
-            <p className="app-caption text-muted-foreground mt-1.5 truncate">Warning</p>
+            <p className="app-caption text-muted-foreground mt-1 truncate">Warning</p>
           </div>
-          <div className="min-w-0 px-2.5 py-2">
+          <div className="min-w-0 px-2 py-2">
             <p className="app-value text-success">{counts.info}</p>
-            <p className="app-caption text-muted-foreground mt-1.5 truncate">Info</p>
+            <p className="app-caption text-muted-foreground mt-1 truncate">Info</p>
           </div>
         </div>
 
-        {/* Severity filter */}
-        <div className="flex rounded-xl border border-border bg-card/70 p-1 mb-2 overflow-x-auto no-scrollbar">
-          {['all', 'critical', 'warning', 'info'].map(level => (<button key={level} onClick={() => setFilterSeverity(level)} className={`min-w-0 flex-1 px-2.5 py-1.5 rounded-lg whitespace-nowrap app-tab transition-colors flex-shrink-0 ${filterSeverity === level
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}>
-              {level.charAt(0).toUpperCase() + level.slice(1)}
-            </button>))}
+        {/* Severity + date on one row */}
+        <div className="flex gap-2 mb-2">
+          <div className="flex flex-1 rounded-xl border border-border bg-card/70 p-1">
+            {['all', 'critical', 'warning', 'info'].map(level => (
+              <button key={level} onClick={() => setFilterSeverity(level)}
+                className={`flex-1 px-1.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${filterSeverity === level ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}>
+                {level.charAt(0).toUpperCase() + level.slice(1)}
+              </button>
+            ))}
+          </div>
+          <div className="flex rounded-xl border border-border bg-card/70 p-1">
+            {[{ label: 'All', val: null }, { label: '7d', val: 7 }, { label: '30d', val: 30 }, { label: '90d', val: 90 }].map(({ label, val }) => (
+              <button key={label} type="button" onClick={() => setFilterDays(val)}
+                className={`px-2 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${filterDays === val ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Category filter */}
-        <div className="flex flex-wrap gap-1.5 pb-1 mb-2">
+        {/* Category filter — single scrollable row */}
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1 mb-3">
           {['all', 'payment', 'payout', 'user', 'security', 'group', 'reminder'].map(cat => (
             <button key={cat} type="button" onClick={() => setFilterCategory(cat)}
               className={`flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-bold transition-colors border ${filterCategory === cat ? 'bg-primary/15 text-primary border-primary/30' : 'bg-card text-muted-foreground border-border hover:text-foreground'}`}>
               {cat.charAt(0).toUpperCase() + cat.slice(1)}
-            </button>
-          ))}
-        </div>
-
-        {/* Date range filter */}
-        <div className="flex items-center gap-1.5 mb-4">
-          {[{ label: 'All time', val: null }, { label: 'Last 7d', val: 7 }, { label: 'Last 30d', val: 30 }, { label: 'Last 90d', val: 90 }].map(({ label, val }) => (
-            <button key={label} type="button" onClick={() => setFilterDays(val)}
-              className={`flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-bold transition-colors border ${filterDays === val ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:text-foreground'}`}>
-              {label}
             </button>
           ))}
         </div>

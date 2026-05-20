@@ -21,25 +21,27 @@ function pickIcon(category) {
             return AlertCircle;
     }
 }
-export function AuditLogItem({ category, severity, actionLabel, details, actorName, actorRole, timestampLabel, }) {
+export function AuditLogItem({ category, severity, actionLabel, details, actorName, actorRole, timestampLabel }) {
     const Icon = pickIcon(category);
-    return (<div className={`rounded-2xl p-4 border ${SEVERITY_COLORS[severity]}`}>
-      <div className="flex items-start gap-3 mb-3">
-        <div className={`p-2 rounded-xl ${severity === 'critical' ? 'bg-destructive/30'
-            : severity === 'warning' ? 'bg-primary/30'
-                : 'bg-success/30'}`}>
-          <Icon className="w-5 h-5"/>
+    return (
+        <div className={`rounded-2xl p-3.5 border ${SEVERITY_COLORS[severity]}`}>
+            <div className="flex items-start gap-3">
+                <div className={`p-1.5 rounded-xl flex-shrink-0 mt-0.5 ${severity === 'critical' ? 'bg-destructive/30' : severity === 'warning' ? 'bg-primary/30' : 'bg-success/30'}`}>
+                    <Icon className="w-4 h-4"/>
+                </div>
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2 mb-0.5">
+                        <h4 className="truncate text-sm font-semibold leading-snug">{actionLabel}</h4>
+                        <span className="text-xs opacity-50 flex-shrink-0 whitespace-nowrap leading-snug pt-px">{timestampLabel}</span>
+                    </div>
+                    <p className="text-xs opacity-75 mb-2 break-words">{details}</p>
+                    <div className="flex items-center gap-1.5 text-xs overflow-hidden">
+                        <span className="px-1.5 py-0.5 bg-background/50 rounded truncate max-w-[130px] flex-shrink">{actorName}</span>
+                        {actorRole && <span className="px-1.5 py-0.5 bg-background/50 rounded flex-shrink-0">{actorRole}</span>}
+                        <span className="px-1.5 py-0.5 bg-background/50 rounded flex-shrink-0">{category.charAt(0).toUpperCase() + category.slice(1)}</span>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div className="flex-1 min-w-0">
-          <h4 className="mb-1 truncate">{actionLabel}</h4>
-          <p className="text-sm opacity-80 mb-2 break-words">{details}</p>
-          <div className="flex flex-wrap gap-2 text-xs">
-            <span className="px-2 py-1 bg-background/50 rounded">{actorName}</span>
-            <span className="px-2 py-1 bg-background/50 rounded">{actorRole}</span>
-            <span className="px-2 py-1 bg-background/50 rounded">{category.charAt(0).toUpperCase() + category.slice(1)}</span>
-          </div>
-        </div>
-      </div>
-      <p className="text-xs opacity-60">{timestampLabel}</p>
-    </div>);
+    );
 }
