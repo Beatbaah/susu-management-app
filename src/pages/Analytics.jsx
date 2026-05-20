@@ -1,4 +1,5 @@
-import { TrendingUp, TrendingDown, BarChart3, Calendar, Activity, Zap } from 'lucide-react';
+import { TrendingUp, TrendingDown, BarChart3, Calendar, Activity, Zap, X, User, ChevronRight } from 'lucide-react';
+import { isFirestoreReady } from '../services/firestoreSync';
 import { BarChart, Bar, PieChart as RPieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { useMemo, useState } from 'react';
 import { useAppContext } from '../context/AppContext';
@@ -38,6 +39,7 @@ const dayLabel = (d) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getD
 export function Analytics() {
     const { payments, groups, schedule, users } = useAppContext();
     const [rangeMonths, setRangeMonths] = useState(6);
+    const [selectedMemberId, setSelectedMemberId] = useState(null);
     const metrics = useMemo(() => calculateFinancialMetrics({ payments, groups, payouts: schedule, users }), [payments, groups, schedule, users]);
     const collectionData = useMemo(() => {
         const now = new Date();
@@ -106,6 +108,47 @@ export function Analytics() {
         }, 0);
         return Math.round((totalDays / paid.length) * 10) / 10;
     }, [payments]);
+    const memberStats = useMemo(() => {
+        const memberUsers = users.filter(u => u.role === 'member');
+        return memberUsers.map(u => {
+            const memberPayments = payments.filter(p => (p.memberId || p.userId) === u.id);
+            const paid = memberPayments.filter(p => p.status === 'paid');
+            const pending = memberPayments.filter(p => p.status === 'pending');
+            const overdue = memberPayments.filter(p => p.status === 'overdue');
+            const totalPaid = paid.reduce((s, p) => s + Number(p.amount || 0), 0);
+            const rate = memberPayments.length > 0 ? Math.round((paid.length / memberPayments.length) * 100) : 0;
+            return { ...u, paid: paid.length, pending: pending.length, overdue: overdue.length, totalPaid, rate, history: [...memberPayments].sort((a, b) => new Date(b.paymentDate || b.date || 0) - new Date(a.paymentDate || a.date || 0)) };
+        }).sort((a, b) => b.totalPaid - a.totalPaid);
+    }, [users, payments]);
+
+    const methodBreakdown = useMemo(() => {
+        const map = {};
+        payments.filter(p => p.status === 'paid').forEach(p => {
+            const m = p.method || 'Cash';
+            if (!map[m]) map[m] = { name: m, count: 0, amount: 0 };
+            map[m].count++;
+            map[m].amount += Number(p.amount || 0);
+        });
+        return Object.values(map).sort((a, b) => b.amount - a.amount);
+    }, [payments]);
+
+    const groupPnL = useMemo(() => {
+        return groups.map(g => {
+            const contribution = Number(g.contributionAmount || g.contribution) || 0;
+            const memberCount = Array.isArray(g.members) ? g.members.length : Number(g.memberCount || g.totalSlots || 0);
+            const currentRound = Number(g.currentRound || 0);
+            const totalRounds = Number(g.totalRounds || g.totalSlots || memberCount || 1);
+            const expectedToDate = contribution * memberCount * currentRound;
+            const collected = payments.filter(p => p.groupId === g.id && p.status === 'paid').reduce((sum, p) => sum + Number(p.amount || 0), 0);
+            const outstanding = Math.max(0, expectedToDate - collected);
+            const rate = expectedToDate > 0 ? Math.round((collected / expectedToDate) * 100) : 0;
+            const disbursed = schedule.filter(s => s.groupId === g.id && (s.status === 'completed' || s.paid)).reduce((sum, s) => sum + Number(s.payoutAmount || s.amount || 0), 0);
+            return { id: g.id, name: g.groupName || g.name, currentRound, totalRounds, expectedToDate, collected, outstanding, disbursed, rate, memberCount };
+        }).filter(g => g.expectedToDate > 0 || g.collected > 0);
+    }, [groups, payments, schedule]);
+
+    const selectedMember = selectedMemberId ? memberStats.find(m => m.id === selectedMemberId) : null;
+
     const collectionRate = Math.round(metrics.collectionRate || 0);
     const defaultRate = Math.round(metrics.defaultRate || 0);
     const activeCycles = groups.filter(g => (g.currentRound || 0) < (g.totalRounds || g.totalSlots || Infinity)).length;
@@ -114,7 +157,7 @@ export function Analytics() {
         {
             label: 'Collection Rate',
             value: `${collectionRate}%`,
-            sub: 'Of expected pool',
+            sub: 'Of expected to date',
             icon: TrendingUp,
             color: 'text-success',
             bg: 'bg-success/15',
@@ -124,7 +167,7 @@ export function Analytics() {
         {
             label: 'Default Rate',
             value: `${defaultRate}%`,
-            sub: 'Overdue / total',
+            sub: 'Overdue / actionable',
             icon: TrendingDown,
             color: 'text-destructive',
             bg: 'bg-destructive/15',
@@ -152,7 +195,7 @@ export function Analytics() {
             positive: true,
         },
     ];
-    return (<div className="pb-28 page-enter">
+    return (<div className="pb-[calc(7rem+env(safe-area-inset-bottom,0px))] page-enter">
       {/* Page Header */}
       <div className="px-4 sm:px-6 pt-5 sm:pt-6 pb-4">
         <div className="mb-4 sm:mb-6">
@@ -207,14 +250,14 @@ export function Analytics() {
                 ))}
               </div>
             </div>
-            <div className="flex items-center gap-5 text-xs font-bold uppercase tracking-widest mb-6">
+            <div className="flex items-center gap-5 mb-6">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-primary"/>
-                <span className="text-muted-foreground">Collected</span>
+                <div className="w-3 h-3 rounded-full bg-primary" aria-hidden="true"/>
+                <span className="eyebrow text-muted-foreground">Collected</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-border"/>
-                <span className="text-muted-foreground">Target</span>
+                <div className="w-3 h-3 rounded-full bg-border" aria-hidden="true"/>
+                <span className="eyebrow text-muted-foreground">Target</span>
               </div>
             </div>
             <ResponsiveContainer width="100%" height={220}>
@@ -232,10 +275,12 @@ export function Analytics() {
                 <p className="eyebrow text-muted-foreground mb-1">Total Collected YTD</p>
                 <p className="text-2xl font-bold text-primary tracking-tighter">{fmt(totalCollected)}</p>
               </div>
-              <div className="flex items-center gap-2 text-xs font-bold text-success/60 uppercase tracking-widest">
-                <Zap className="w-4 h-4 fill-success/40"/>
-                Live Data
-              </div>
+              {isFirestoreReady() && (
+                <div className="flex items-center gap-2 text-xs font-bold text-success/60 uppercase tracking-widest">
+                  <Zap className="w-4 h-4 fill-success/40"/>
+                  Live Data
+                </div>
+              )}
             </div>
           </div>
 
@@ -315,5 +360,237 @@ export function Analytics() {
           </div>
         </div>
       </div>
+
+      {/* Member Performance Drill-down */}
+      {memberStats.length > 0 && (
+        <div className="px-4 sm:px-6 mt-6 sm:mt-8">
+          <div className="glass-card rounded-2xl p-6 sm:p-8 border border-border">
+            <div className="mb-6">
+              <h3 className="text-xl font-bold text-foreground tracking-tight">Member Performance</h3>
+              <p className="eyebrow text-muted-foreground mt-1">Click a member to see their payment history</p>
+            </div>
+            <div className="space-y-2">
+              {memberStats.map(m => (
+                <button key={m.id} type="button" onClick={() => setSelectedMemberId(m.id)}
+                  className={cn(
+                    'w-full flex items-center justify-between gap-3 p-3.5 rounded-xl text-left',
+                    'border border-transparent hover:border-border hover:bg-accent/40',
+                    'transition-all duration-200 group'
+                  )}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={cn(
+                      'w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-sm',
+                      m.overdue > 0 ? 'bg-destructive/15 text-destructive' : m.rate >= 80 ? 'bg-success/15 text-success' : 'bg-primary/15 text-primary'
+                    )}>
+                      {(m.fullName || m.name || '?').charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="body-strong text-foreground truncate group-hover:text-primary transition-colors">{m.fullName || m.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="eyebrow text-muted-foreground">{m.paid} paid</span>
+                        {m.pending > 0 && <span className="eyebrow text-primary/70">{m.pending} pending</span>}
+                        {m.overdue > 0 && <span className="eyebrow text-destructive/70">{m.overdue} overdue</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 flex-shrink-0">
+                    <div className="text-right hidden sm:block">
+                      <p className="body-strong text-foreground">{fmt(m.totalPaid)}</p>
+                      <div className="flex items-center justify-end gap-1 mt-0.5">
+                        <div className="w-16 h-1.5 bg-border rounded-full overflow-hidden">
+                          <div className={cn('h-full rounded-full', m.rate >= 80 ? 'bg-success' : m.rate >= 50 ? 'bg-primary' : 'bg-destructive')}
+                            style={{ width: `${m.rate}%` }}/>
+                        </div>
+                        <span className="eyebrow text-muted-foreground">{m.rate}%</span>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors"/>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Per-group P&L */}
+      {groupPnL.length > 0 && (
+        <div className="px-4 sm:px-6 mt-6 sm:mt-8">
+          <div className="glass-card rounded-2xl p-6 sm:p-8 border border-border">
+            <div className="mb-6">
+              <h3 className="text-xl font-bold text-foreground tracking-tight">Cycle P&amp;L by Group</h3>
+              <p className="eyebrow text-muted-foreground mt-1">Collection performance per active cycle to date</p>
+            </div>
+            <div className="space-y-4">
+              {groupPnL.map(g => (
+                <div key={g.id} className="p-4 rounded-xl border border-border hover:bg-accent/30 transition-colors">
+                  <div className="flex items-start justify-between gap-4 mb-3">
+                    <div className="min-w-0">
+                      <p className="body-strong text-foreground truncate">{g.name}</p>
+                      <p className="eyebrow text-muted-foreground mt-0.5">Round {g.currentRound} / {g.totalRounds} · {g.memberCount} members</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className={cn('text-sm font-bold tabular-nums', g.outstanding > 0 ? 'text-destructive' : 'text-success')}>
+                        {g.outstanding > 0 ? `-${fmt(g.outstanding)}` : 'Fully collected'}
+                      </p>
+                      <p className="eyebrow text-muted-foreground mt-0.5">outstanding</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 mb-3">
+                    {[
+                      { label: 'Expected', value: fmt(g.expectedToDate), color: 'text-muted-foreground' },
+                      { label: 'Collected', value: fmt(g.collected), color: 'text-success' },
+                      { label: 'Disbursed', value: fmt(g.disbursed), color: 'text-primary' },
+                    ].map(s => (
+                      <div key={s.label} className="text-center">
+                        <p className={cn('text-sm font-bold tabular-nums', s.color)}>{s.value}</p>
+                        <p className="eyebrow text-muted-foreground">{s.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
+                      <div className={cn('h-full rounded-full transition-all', g.rate >= 80 ? 'bg-success' : g.rate >= 50 ? 'bg-primary' : 'bg-destructive')}
+                        style={{ width: `${Math.min(100, g.rate)}%` }}/>
+                    </div>
+                    <span className="eyebrow text-muted-foreground w-10 text-right">{g.rate}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Method Breakdown */}
+      {methodBreakdown.length > 0 && (
+        <div className="px-4 sm:px-6 mt-6 sm:mt-8">
+          <div className="glass-card rounded-2xl p-6 sm:p-8 border border-border">
+            <div className="mb-6">
+              <h3 className="text-xl font-bold text-foreground tracking-tight">Payment Method Breakdown</h3>
+              <p className="eyebrow text-muted-foreground mt-1">Volume and value by channel</p>
+            </div>
+            {(() => {
+              const maxAmount = methodBreakdown[0]?.amount || 1;
+              return (
+                <div className="space-y-4">
+                  {methodBreakdown.map((m, i) => (
+                    <div key={m.name}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }}/>
+                          <span className="body text-foreground">{m.name}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="eyebrow text-muted-foreground">{m.count} txn{m.count !== 1 ? 's' : ''}</span>
+                          <span className="body-strong text-foreground tabular-nums w-24 text-right">{fmt(m.amount)}</span>
+                        </div>
+                      </div>
+                      <div className="h-2 bg-border rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all"
+                          style={{ width: `${Math.round((m.amount / maxAmount) * 100)}%`, backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }}/>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* Member Detail Modal */}
+      {selectedMember && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={() => setSelectedMemberId(null)}>
+          <div className={cn(
+            'relative w-full max-w-lg bg-card border border-border',
+            'rounded-2xl shadow-2xl overflow-hidden',
+            'max-h-[85dvh] flex flex-col z-10 animate-in zoom-in-95 duration-300'
+          )} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-border flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  'w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm',
+                  selectedMember.overdue > 0 ? 'bg-destructive/15 text-destructive' : 'bg-primary/15 text-primary'
+                )}>
+                  {(selectedMember.fullName || selectedMember.name || '?').charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="body-strong text-foreground">{selectedMember.fullName || selectedMember.name}</p>
+                  <p className="eyebrow text-muted-foreground mt-0.5">{selectedMember.email}</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setSelectedMemberId(null)}
+                className="w-8 h-8 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                <X className="w-4 h-4"/>
+              </button>
+            </div>
+
+            <div className="p-5 border-b border-border flex-shrink-0">
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: 'Paid', value: selectedMember.paid, color: 'text-success' },
+                  { label: 'Pending', value: selectedMember.pending, color: 'text-primary' },
+                  { label: 'Overdue', value: selectedMember.overdue, color: 'text-destructive' },
+                ].map(s => (
+                  <div key={s.label} className="p-3 rounded-xl bg-accent/50 border border-border text-center">
+                    <p className={cn('text-xl font-bold', s.color)}>{s.value}</p>
+                    <p className="eyebrow text-muted-foreground mt-0.5">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 flex items-center justify-between">
+                <p className="eyebrow text-muted-foreground">Total collected</p>
+                <p className="body-strong text-primary">{fmt(selectedMember.totalPaid)}</p>
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <div className="flex-1 h-2 bg-border rounded-full overflow-hidden">
+                  <div className={cn('h-full rounded-full', selectedMember.rate >= 80 ? 'bg-success' : selectedMember.rate >= 50 ? 'bg-primary' : 'bg-destructive')}
+                    style={{ width: `${selectedMember.rate}%` }}/>
+                </div>
+                <span className="eyebrow text-muted-foreground">{selectedMember.rate}% on-time</span>
+              </div>
+            </div>
+
+            <div className="overflow-y-auto flex-1 p-5">
+              <p className="eyebrow text-muted-foreground mb-3">Payment history</p>
+              {selectedMember.history.length === 0 ? (
+                <div className="py-8 text-center">
+                  <User className="w-8 h-8 text-muted-foreground mx-auto mb-2"/>
+                  <p className="eyebrow text-muted-foreground">No payments recorded</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {selectedMember.history.map(p => {
+                    const grp = groups.find(g => g.id === p.groupId);
+                    return (
+                      <div key={p.id} className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border hover:bg-accent/30 transition-colors">
+                        <div className="min-w-0">
+                          <p className="body text-foreground truncate">{grp?.groupName || grp?.name || 'Group'}</p>
+                          <p className="eyebrow text-muted-foreground mt-0.5">
+                            {p.paymentDate ? new Date(p.paymentDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date'}
+                          </p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="body-strong text-foreground">{fmt(p.amount)}</p>
+                          <span className={cn(
+                            'inline-block px-2 py-0.5 rounded-md text-xs font-medium mt-0.5',
+                            p.status === 'paid' ? 'bg-success/15 text-success' :
+                            p.status === 'overdue' ? 'bg-destructive/15 text-destructive' :
+                            'bg-primary/15 text-primary'
+                          )}>
+                            {p.status}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>);
 }

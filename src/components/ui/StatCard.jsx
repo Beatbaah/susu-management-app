@@ -10,14 +10,15 @@ const accentColor = (iconColor = '') => {
 export function StatCard({ title, value, icon: Icon, iconColor, trend, subtitle, className }) {
     return (
         <div className={cn(
-            'bg-card rounded-xl border border-border border-l-[3px] p-4',
-            'hover:-translate-y-px hover:shadow-md transition-all duration-200',
+            'bg-card rounded-xl border border-border border-l-[4px] p-4',
+            'shadow-[var(--shadow-xs)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)]',
+            'transition-all duration-200',
             accentColor(iconColor),
             className,
         )}>
             <div className="flex items-start justify-between mb-3">
-                <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center', iconColor)}>
-                    <Icon className="w-4 h-4" />
+                <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shadow-[var(--shadow-xs)]', iconColor)}>
+                    <Icon className="w-4.5 h-4.5" />
                 </div>
                 {trend && (
                     <span className={cn(

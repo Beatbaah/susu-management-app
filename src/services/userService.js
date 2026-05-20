@@ -31,8 +31,7 @@ export function createUser(input) {
         createdAt: now,
         updatedAt: now,
         ...input,
-        name: input.name || input.fullName,
-        fullName: input.fullName || input.name,
+        fullName: input.fullName || input.name || '',
         phone: input.phone ? String(input.phone).replace(/[\s\-()]/g, '') : input.phone,
         joinedAt: input.joinedAt || now.split('T')[0],
     };

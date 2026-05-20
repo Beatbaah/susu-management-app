@@ -24,7 +24,7 @@
   --palette-white: #FFFFFF;
 
   /* ── Surfaces ── */
-  --background: var(--palette-anti-flash-white);
+  --background: #E8EDF8;
   --foreground: var(--palette-dark-cerulean);
   --card: var(--palette-white);
   --card-foreground: var(--foreground);
@@ -50,7 +50,7 @@
   --warning-foreground: #FFFFFF;
 
   /* ── Borders & Inputs ── */
-  --border: rgba(100, 145, 222, 0.18);
+  --border: rgba(100, 145, 222, 0.28);
   --input: transparent;
   --input-background: #F4F8FF;
   --switch-background: #9DB4D8;
@@ -76,14 +76,14 @@
 
   /* ── Elevation / Glass ── */
   --glass-bg: rgba(255, 255, 255, 0.96);
-  --glass-border: #C8D6EE;
-  --glass-shadow: 0 1px 4px rgba(7, 61, 127, 0.06), 0 4px 16px rgba(7, 61, 127, 0.07);
+  --glass-border: #BACCE8;
+  --glass-shadow: 0 1px 4px rgba(7, 61, 127, 0.09), 0 4px 20px rgba(7, 61, 127, 0.11);
 
   /* ── Shadow scale ── */
-  --shadow-xs: 0 1px 2px rgba(7, 61, 127, 0.06);
-  --shadow-sm: 0 1px 3px rgba(7, 61, 127, 0.06), 0 2px 8px rgba(7, 61, 127, 0.06);
-  --shadow-md: 0 2px 4px rgba(7, 61, 127, 0.06), 0 4px 16px rgba(7, 61, 127, 0.08);
-  --shadow-lg: 0 4px 8px rgba(7, 61, 127, 0.08), 0 8px 24px rgba(7, 61, 127, 0.10);
+  --shadow-xs: 0 1px 2px rgba(7, 61, 127, 0.08);
+  --shadow-sm: 0 1px 3px rgba(7, 61, 127, 0.09), 0 3px 10px rgba(7, 61, 127, 0.09);
+  --shadow-md: 0 2px 6px rgba(7, 61, 127, 0.11), 0 6px 20px rgba(7, 61, 127, 0.11);
+  --shadow-lg: 0 4px 10px rgba(7, 61, 127, 0.13), 0 12px 32px rgba(7, 61, 127, 0.13);
 
   /* ── Brand color tokens ── */
   --susu-blue: #6491DE;

@@ -1,15 +1,43 @@
-import { useState } from 'react';
-import { User, Bell, Shield, FileText, Settings, LogOut, ChevronRight, HelpCircle, MessageSquare, Award, Receipt, X, } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { User, Bell, Shield, FileText, Settings, LogOut, ChevronRight, HelpCircle, MessageSquare, Award, Receipt, X, AlertCircle, Camera } from 'lucide-react';
 import { userService } from '../services';
 import { useAppContext } from '../context/AppContext';
 import { validateEmail } from '../validation/authRules';
 import { fmt } from '../utils/helpers';
+import { updateDisplayName, setNameOverride } from '../services/authService';
+import { uploadFile } from '../services/storageService';
+import { toast } from '../utils/toast';
 
 const GHANA_PHONE_RE = /^(\+233|0)[2-5][0-9]{8}$/;
 export function Profile({ user, onNavigate, onLogout }) {
     const { authUser, users, groups, payments, reminders, setUsers, setAuthUser } = useAppContext();
     const currentUser = authUser || user;
     const [editorOpen, setEditorOpen] = useState(false);
+    const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const photoInputRef = useRef(null);
+    const handlePhotoChange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploadingPhoto(true);
+        try {
+            const url = await uploadFile(`users/${currentUser.id}/profile.jpg`, file);
+            if (url) {
+                const updated = userService.updateUser(currentUser.id, { profilePic: url }, currentUser);
+                if (updated) {
+                    setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
+                    if (authUser?.id === updated.id) setAuthUser(updated);
+                }
+                toast.success('Profile photo updated');
+            } else {
+                toast.error('Upload failed. Try again.');
+            }
+        } catch {
+            toast.error('Could not upload photo.');
+        } finally {
+            setUploadingPhoto(false);
+            e.target.value = '';
+        }
+    };
     const [draft, setDraft] = useState({
         fullName: currentUser.fullName || currentUser.name || '',
         email: currentUser.email || '',
@@ -48,14 +76,19 @@ export function Profile({ user, onNavigate, onLogout }) {
             email: draft.email.trim(),
             phone: draft.phone.trim(),
             address: draft.address.trim(),
-        });
+        }, currentUser);
         if (!updated) {
             setEditorError('Could not update profile.');
             return;
         }
         setUsers(prev => prev.map(u => (u.id === updated.id ? updated : u)));
-        if (authUser?.id === updated.id)
+        if (authUser?.id === updated.id) {
             setAuthUser(updated);
+            const trimmedName = draft.fullName.trim();
+            // Persist real name to localStorage (survives sign-out) and Firebase Auth
+            setNameOverride(authUser.email, trimmedName);
+            void updateDisplayName(trimmedName);
+        }
         setEditorOpen(false);
     };
     const userGroups = groups.filter(group => {
@@ -150,11 +183,25 @@ export function Profile({ user, onNavigate, onLogout }) {
 
         <div className="bg-card rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-border mb-4 sm:mb-6">
           <div className="flex items-center gap-3 sm:gap-4 mb-4">
-            <div className="w-14 h-14 sm:w-20 sm:h-20 bg-primary rounded-2xl sm:rounded-3xl flex items-center justify-center flex-shrink-0">
-              <span className="text-primary-foreground text-lg sm:text-2xl font-bold">
-                {currentUser.name.split(' ').map(n => n[0]).join('')}
-              </span>
-            </div>
+            <button type="button" onClick={() => photoInputRef.current?.click()} disabled={uploadingPhoto}
+              className="relative w-14 h-14 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl flex-shrink-0 group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+              title="Change photo">
+              {currentUser.profilePic ? (
+                <img src={currentUser.profilePic} alt={currentUser.name} className="w-full h-full rounded-2xl sm:rounded-3xl object-cover"/>
+              ) : (
+                <div className="w-full h-full bg-primary rounded-2xl sm:rounded-3xl flex items-center justify-center">
+                  <span className="text-primary-foreground text-lg sm:text-2xl font-bold">
+                    {(currentUser.name || currentUser.fullName || '?').split(' ').map(n => n[0]).join('')}
+                  </span>
+                </div>
+              )}
+              <div className="absolute inset-0 rounded-2xl sm:rounded-3xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                {uploadingPhoto
+                  ? <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin"/>
+                  : <Camera className="w-5 h-5 text-white"/>}
+              </div>
+            </button>
+            <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange}/>
             <div className="flex-1 min-w-0">
               <h2 className="text-base sm:text-xl font-bold mb-1 truncate">{currentUser.name}</h2>
               <p className="text-muted-foreground text-xs sm:text-sm mb-2 truncate">{currentUser.email}</p>
@@ -206,7 +253,7 @@ export function Profile({ user, onNavigate, onLogout }) {
             </div>
           </div>))}
 
-        <button type="button" onClick={onLogout} className="w-full bg-destructive/20 text-destructive py-4 rounded-2xl flex items-center justify-center gap-2">
+        <button type="button" onClick={onLogout} className="w-full bg-destructive/20 text-destructive py-3.5 rounded-2xl font-semibold flex items-center justify-center gap-2">
           <LogOut className="w-5 h-5"/>
           <span>Logout</span>
         </button>
@@ -217,38 +264,45 @@ export function Profile({ user, onNavigate, onLogout }) {
         </div>
       </div>
 
-      {editorOpen && (<div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-card rounded-3xl border border-border w-full max-w-md p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-bold">Edit Profile</h3>
-              <button type="button" onClick={() => setEditorOpen(false)} className="p-2 rounded-xl hover:bg-muted/50">
-                <X className="w-5 h-5 text-muted-foreground"/>
+      {editorOpen && (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setEditorOpen(false)}>
+          <div className="bg-card rounded-2xl border border-border w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[85dvh] animate-in zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 pt-4 sm:pt-5 pb-4 border-b border-border/50 flex-shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 bg-primary/15 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <User className="w-4 h-4 text-primary"/>
+                </div>
+                <h3 className="text-base font-bold">Edit Profile</h3>
+              </div>
+              <button type="button" onClick={() => setEditorOpen(false)} className="w-8 h-8 rounded-xl bg-muted/50 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors flex-shrink-0">
+                <X className="w-4 h-4"/>
               </button>
             </div>
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Full Name</label>
-                <input type="text" value={draft.fullName} onChange={(e) => setDraft(p => ({ ...p, fullName: e.target.value }))} className="w-full bg-input-background border border-border rounded-xl px-3 py-3 text-foreground"/>
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-medium text-foreground/70 mb-1.5 block">Full Name</label>
+                  <input type="text" value={draft.fullName} onChange={(e) => setDraft(p => ({ ...p, fullName: e.target.value }))} className="w-full bg-card border-2 border-border rounded-xl px-4 py-3.5 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"/>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-foreground/70 mb-1.5 block">Email</label>
+                  <input type="email" value={draft.email} onChange={(e) => setDraft(p => ({ ...p, email: e.target.value }))} className="w-full bg-card border-2 border-border rounded-xl px-4 py-3.5 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"/>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-foreground/70 mb-1.5 block">Phone</label>
+                  <input type="tel" value={draft.phone} onChange={(e) => setDraft(p => ({ ...p, phone: e.target.value }))} className="w-full bg-card border-2 border-border rounded-xl px-4 py-3.5 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"/>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-foreground/70 mb-1.5 block">Address</label>
+                  <input type="text" value={draft.address} onChange={(e) => setDraft(p => ({ ...p, address: e.target.value }))} className="w-full bg-card border-2 border-border rounded-xl px-4 py-3.5 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"/>
+                </div>
+                {editorError && <div className="flex items-center gap-2 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs font-semibold"><AlertCircle className="w-4 h-4 flex-shrink-0"/>{editorError}</div>}
               </div>
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Email</label>
-                <input type="email" value={draft.email} onChange={(e) => setDraft(p => ({ ...p, email: e.target.value }))} className="w-full bg-input-background border border-border rounded-xl px-3 py-3 text-foreground"/>
-              </div>
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Phone</label>
-                <input type="tel" value={draft.phone} onChange={(e) => setDraft(p => ({ ...p, phone: e.target.value }))} className="w-full bg-input-background border border-border rounded-xl px-3 py-3 text-foreground"/>
-              </div>
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Address</label>
-                <input type="text" value={draft.address} onChange={(e) => setDraft(p => ({ ...p, address: e.target.value }))} className="w-full bg-input-background border border-border rounded-xl px-3 py-3 text-foreground"/>
-              </div>
-              {editorError && <p className="text-destructive text-sm">{editorError}</p>}
             </div>
-            <div className="flex gap-2 mt-6">
-              <button type="button" onClick={() => setEditorOpen(false)} className="flex-1 bg-card border border-border py-3 rounded-xl text-foreground">
+            <div className="flex gap-3 px-5 py-4 border-t border-border/50 bg-card flex-shrink-0">
+              <button type="button" onClick={() => setEditorOpen(false)} className="flex-1 bg-muted border border-border py-3.5 rounded-xl text-sm font-semibold text-foreground/70 hover:text-foreground transition-all">
                 Cancel
               </button>
-              <button type="button" onClick={saveProfile} className="flex-1 bg-primary text-primary-foreground py-3 rounded-xl">
+              <button type="button" onClick={saveProfile} className="flex-[1.5] bg-primary text-primary-foreground py-3.5 rounded-xl text-sm font-bold hover:opacity-90 transition-all active:scale-[0.98]">
                 Save Profile
               </button>
             </div>

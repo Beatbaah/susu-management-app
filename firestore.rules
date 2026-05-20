@@ -58,6 +58,10 @@ service cloud.firestore {
       return isRealAuth() && request.auth.uid == userId;
     }
 
+    function notSuspended() {
+      return callerDoc().data.status != 'suspended';
+    }
+
     // Deny attempts to escalate privileges via incoming write.
     function noRoleEscalation() {
       return !('role' in request.resource.data) ||
@@ -70,7 +74,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if ownsDoc(userId) || isStaff();
       allow create: if isManager() || ownsDoc(userId);
-      allow update: if (ownsDoc(userId) && noRoleEscalation()) || isManager();
+      allow update: if (ownsDoc(userId) && noRoleEscalation()) || (isManager() && noRoleEscalation());
       allow delete: if false;
     }
 
@@ -109,7 +113,7 @@ service cloud.firestore {
         || (isMember() && request.auth.uid in
             get(/databases/$(database)/documents/groups/$(groupId)).data.members);
       allow create: if isStaff()
-        || (isMember() && request.auth.uid in
+        || (isMember() && notSuspended() && request.auth.uid in
             get(/databases/$(database)/documents/groups/$(groupId)).data.members);
       // Messages are immutable once sent.
       allow update, delete: if false;
@@ -120,7 +124,8 @@ service cloud.firestore {
     match /notifications/{notificationId} {
       allow read: if isManager()
         || (isRealAuth() && resource.data.userId == request.auth.uid);
-      allow create: if isManager();
+      // Collectors can create notifications (send payment reminders).
+      allow create: if isStaff();
       // Owner can mark as read; managers can update any field.
       allow update: if isManager()
         || (isRealAuth() && resource.data.userId == request.auth.uid
@@ -132,8 +137,18 @@ service cloud.firestore {
 
     match /auditLogs/{logId} {
       allow read: if isAdmin();
-      // Any authenticated (non-anonymous) user can append log entries.
-      allow create: if isRealAuth();
+      // Only staff may write audit entries from the client; members cannot forge logs.
+      // Migrate to Cloud Functions + Admin SDK for tamper-proof logs.
+      allow create: if isStaff();
+      allow update, delete: if false;
+    }
+
+    // ── /receipts ─────────────────────────────────────────────────────────
+
+    match /receipts/{receiptId} {
+      allow read: if isManager()
+        || (isMember() && resource.data.userId == request.auth.uid);
+      allow create: if isManager();
       allow update, delete: if false;
     }
 

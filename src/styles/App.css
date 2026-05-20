@@ -172,7 +172,7 @@ code, pre, .mono {
 .app-tab,
 .app-badge,
 .app-action {
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1;
   letter-spacing: 0;
 }
@@ -184,7 +184,7 @@ code, pre, .mono {
 }
 
 .app-caption {
-  font-weight: 400;
+  font-weight: 500;
 }
 
 .app-badge {
@@ -192,10 +192,10 @@ code, pre, .mono {
 }
 
 .app-value {
-  font-size: 12px;
-  line-height: 1;
-  font-weight: 600;
-  letter-spacing: 0;
+  font-size: 1.125rem; /* 18px — readable stat numbers */
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
 
@@ -207,8 +207,8 @@ code, pre, .mono {
 }
 
 .app-row-meta {
-  font-size: 14px;
-  line-height: 1.3;
+  font-size: 13px;
+  line-height: 1.4;
   font-weight: 400;
   letter-spacing: 0;
 }
@@ -239,6 +239,11 @@ code, pre, .mono {
   background: var(--card);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-md);
+}
+.elevation-3:hover {
+  box-shadow: var(--shadow-lg);
+  border-color: color-mix(in srgb, var(--primary) 20%, var(--border));
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 /* ─── Tactile card: used on stat/hero cards ─── */

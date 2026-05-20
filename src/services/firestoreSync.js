@@ -8,19 +8,16 @@ import { db, auth } from '../utils/firebase';
 let authReady = null;
 function waitForAuth() {
     if (!auth) return Promise.resolve();
+    // Fast path — already authenticated, no need to wait for an event
+    if (auth.currentUser && !auth.currentUser.isAnonymous) return Promise.resolve();
     if (authReady) return authReady;
     authReady = new Promise((resolve) => {
         const unsub = onAuthStateChanged(auth, (user) => {
-            if (user && user.isAnonymous === false) {
+            if (user && !user.isAnonymous) {
                 unsub();
-                resolve();
-            } else if (!user) {
-                // Not signed in — resolve so callers don't hang indefinitely,
-                // but Firestore rules will reject the write if auth is required.
-                unsub();
-                authReady = null; // allow re-checking on next call
                 resolve();
             }
+            // !user: don't resolve — subscriptions must wait for real login
         });
     });
     return authReady;
@@ -33,6 +30,15 @@ function waitForAuth() {
  * cache keeps working transparently.
  */
 export const isFirestoreReady = () => !!db;
+
+// Optional callback invoked whenever a write to Firestore fails.
+// Set this in the app shell so users see a toast instead of a silent failure.
+let _onWriteError = null;
+export function setWriteErrorHandler(handler) { _onWriteError = handler; }
+function notifyWriteError(name, error) {
+    console.warn(`[firestoreSync] write failed (${name})`, error);
+    if (_onWriteError) _onWriteError(name, error);
+}
 const safeDb = () => {
     if (!db)
         throw new Error('Firestore not configured');
@@ -71,7 +77,7 @@ export async function replaceCollection(name, items) {
         }
     }
     catch (error) {
-        console.warn(`[firestoreSync] replaceCollection(${name}) failed`, error);
+        notifyWriteError(name, error);
     }
 }
 /** Upsert a single document. */
@@ -83,7 +89,7 @@ export async function upsertDoc(name, item) {
         await setDoc(doc(safeDb(), name, String(item.id)), item, { merge: true });
     }
     catch (error) {
-        console.warn(`[firestoreSync] upsertDoc(${name}/${item.id}) failed`, error);
+        notifyWriteError(name, error);
     }
 }
 /** Remove a single document. */
@@ -105,15 +111,17 @@ export async function readCollection(name) {
     try {
         await waitForAuth();
         const snap = await getDocs(query(collection(safeDb(), name)));
-        return snap.docs.map(d => d.data());
+        return snap.docs.map(d => ({ ...d.data(), id: d.id }));
     }
     catch (error) {
         console.warn(`[firestoreSync] readCollection(${name}) failed`, error);
         return [];
     }
 }
-/** Subscribe to a collection. Returns an Unsubscribe; no-op in demo mode. */
-export function subscribeCollection(name, onChange) {
+/** Subscribe to a collection. Returns an Unsubscribe; no-op in demo mode.
+ *  Pass Firestore query constraints (e.g. where(...)) as the third argument
+ *  to filter results — required for role-scoped queries (members, collectors). */
+export function subscribeCollection(name, onChange, constraints = []) {
     if (!db)
         return () => { };
     let canceled = false;
@@ -122,7 +130,11 @@ export function subscribeCollection(name, onChange) {
         if (canceled)
             return;
         try {
-            inner = onSnapshot(query(collection(safeDb(), name)), snap => onChange(snap.docs.map(d => d.data())), error => console.warn(`[firestoreSync] subscribe(${name})`, error));
+            inner = onSnapshot(
+                query(collection(safeDb(), name), ...constraints),
+                snap => onChange(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+                error => console.warn(`[firestoreSync] subscribe(${name})`, error)
+            );
         }
         catch (error) {
             console.warn(`[firestoreSync] subscribe(${name}) failed`, error);

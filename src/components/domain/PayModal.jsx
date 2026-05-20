@@ -164,7 +164,7 @@ function Form({ channel, providers, provider, account, error, amount, onChannelC
           {channel === 'momo'
             ? <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"/>
             : <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"/>}
-          <input type="text" value={account} onChange={(e) => onAccountChange(e.target.value)} placeholder={channel === 'momo' ? '0244 123 456' : '1234567890123'} className="w-full pl-10 pr-3 py-3 bg-input-background border border-border rounded-xl text-foreground" inputMode={channel === 'momo' ? 'tel' : 'numeric'}/>
+          <input type="text" value={account} onChange={(e) => onAccountChange(e.target.value)} placeholder={channel === 'momo' ? '0244 123 456' : '1234567890123'} className="w-full pl-10 pr-3 py-3 bg-card border-2 border-border rounded-xl text-foreground" inputMode={channel === 'momo' ? 'tel' : 'numeric'}/>
         </div>
       </div>
 

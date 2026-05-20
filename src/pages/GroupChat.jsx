@@ -1,6 +1,5 @@
-import { Send, Paperclip, MessageSquare, Megaphone, X } from 'lucide-react';
-import { toast } from '../utils/toast';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Send, MessageSquare, Megaphone, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { cn } from '../components/ui/utils';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -12,11 +11,6 @@ export function GroupChat() {
     const [announceOpen, setAnnounceOpen] = useState(false);
     const [announceText, setAnnounceText] = useState('');
     const scrollerRef = useRef(null);
-    const fileInputRef = useRef(null);
-    const handleFileAttach = useCallback((e) => {
-        e.target.value = '';
-        toast.info('File attachments are not yet supported.');
-    }, []);
     const accessibleGroups = useMemo(() => {
         if (!authUser)
             return [];
@@ -139,14 +133,10 @@ export function GroupChat() {
         // Desktop has no mobile nav, so always use the standard padding.
         navIsHidden ? 'pb-4' : 'pb-[calc(6rem+env(safe-area-inset-bottom,0px))] md:pb-4')}>
         <div className="bg-card border border-border rounded-2xl p-2 shadow-lg">
-          <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileAttach} accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"/>
           <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); handleSend(); }}>
-            <button type="button" onClick={() => fileInputRef.current?.click()} className="w-10 h-10 text-muted-foreground hover:bg-muted/50 rounded-xl transition-colors flex items-center justify-center">
-              <Paperclip className="w-5 h-5"/>
-            </button>
-            <input type="text" value={messageText} onChange={(e) => setMessageText(e.target.value)} placeholder="Type your message..." className="flex-1 bg-transparent border-none focus:ring-0 text-sm py-2 outline-none"/>
+            <input type="text" value={messageText} onChange={(e) => setMessageText(e.target.value)} placeholder="Type your message..." className="flex-1 bg-transparent border-none focus:ring-0 text-sm py-2 pl-2 outline-none"/>
             {canAnnounce && (
-              <button type="button" onClick={() => setAnnounceOpen(true)} className="w-10 h-10 text-muted-foreground hover:bg-muted/50 rounded-xl transition-colors flex items-center justify-center" title="Send announcement">
+              <button type="button" onClick={() => setAnnounceOpen(true)} className="w-10 h-10 text-muted-foreground hover:bg-muted/50 rounded-xl transition-colors flex items-center justify-center" aria-label="Send announcement">
                 <Megaphone className="w-5 h-5"/>
               </button>
             )}
@@ -158,32 +148,42 @@ export function GroupChat() {
       </div>
 
       {announceOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/20 backdrop-blur-sm" onClick={() => setAnnounceOpen(false)}>
-          <div className="bg-card border border-border rounded-2xl w-full max-w-md p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-9 h-9 bg-warning/15 rounded-xl flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setAnnounceOpen(false)}>
+          <div className="bg-card border border-border w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[80dvh] animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pt-4 sm:pt-5 pb-4 border-b border-border/50 flex-shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 bg-warning/15 rounded-xl flex items-center justify-center flex-shrink-0">
                   <Megaphone className="w-4 h-4 text-warning"/>
                 </div>
-                <h3 className="text-lg font-bold text-foreground">Send Announcement</h3>
+                <div>
+                  <h3 className="text-base font-bold text-foreground">Send Announcement</h3>
+                  <p className="text-xs text-muted-foreground">Visible to all group members</p>
+                </div>
               </div>
-              <button type="button" onClick={() => setAnnounceOpen(false)} className="w-8 h-8 rounded-xl bg-muted/50 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
+              <button type="button" onClick={() => setAnnounceOpen(false)} className="w-8 h-8 rounded-xl bg-muted/50 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors flex-shrink-0">
                 <X className="w-4 h-4"/>
               </button>
             </div>
-            <p className="text-xs text-muted-foreground mb-3">This will be sent as a highlighted announcement to all group members.</p>
-            <textarea
-              value={announceText}
-              onChange={(e) => setAnnounceText(e.target.value)}
-              placeholder="Write your announcement..."
-              rows={4}
-              className="w-full bg-input-background border border-border rounded-2xl px-4 py-3 text-sm text-foreground outline-none focus:border-primary/40 transition-all resize-none mb-4"
-            />
-            <div className="flex gap-3">
-              <button type="button" onClick={() => setAnnounceOpen(false)} className="flex-1 bg-muted border border-border py-3 rounded-2xl app-action uppercase text-foreground/60 hover:text-foreground transition-all">
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              <textarea
+                value={announceText}
+                onChange={(e) => setAnnounceText(e.target.value)}
+                placeholder="Write your announcement..."
+                rows={4}
+                className="w-full bg-card border-2 border-border rounded-xl px-4 py-4 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all resize-none"
+              />
+            </div>
+
+            {/* Footer */}
+            <div className="flex gap-3 px-5 py-4 border-t border-border/50 bg-card flex-shrink-0">
+              <button type="button" onClick={() => setAnnounceOpen(false)} className="flex-1 bg-muted border border-border py-3 rounded-xl app-action uppercase text-foreground/60 hover:text-foreground transition-all">
                 Cancel
               </button>
-              <button type="button" onClick={handleSendAnnouncement} disabled={!announceText.trim()} className={cn('flex-[1.5] py-3 rounded-2xl app-action uppercase transition-all', announceText.trim() ? 'bg-warning text-white hover:opacity-90' : 'bg-muted text-muted-foreground opacity-50 cursor-not-allowed')}>
+              <button type="button" onClick={handleSendAnnouncement} disabled={!announceText.trim()} className={cn('flex-[1.5] py-3 rounded-xl app-action uppercase transition-all active:scale-[0.98]', announceText.trim() ? 'bg-warning text-white hover:opacity-90' : 'bg-muted text-muted-foreground opacity-50 cursor-not-allowed')}>
                 Send Announcement
               </button>
             </div>

@@ -1,26 +1,61 @@
-import { TrendingUp, TrendingDown, Users, Users2, AlertCircle, CheckCircle, ChevronRight, ArrowRight, Zap, History, } from 'lucide-react';
+import { TrendingUp, TrendingDown, Users, Users2, AlertCircle, CheckCircle, ChevronRight, ArrowRight, Zap, History, Clock, Banknote, Wallet } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { StatCard } from '../components/ui/StatCard';
 import { useAppContext } from '../context/AppContext';
 import { fmt } from '../utils/helpers';
 import { cn } from '../components/ui/utils';
 const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+const greeting = () => {
+    const h = new Date().getHours();
+    if (h < 12) return 'Morning';
+    if (h < 17) return 'Afternoon';
+    return 'Evening';
+};
+const TIME_FILTERS = [
+    { id: 'month', label: 'This month' },
+    { id: '3months', label: '3 months' },
+    { id: 'all', label: 'All time' },
+];
 export function Dashboard({ user, onNavigate }) {
-    const { users, groups, payments, schedule } = useAppContext();
+    const { users, groups, payments, schedule, appReady } = useAppContext();
+    const [timeFilter, setTimeFilter] = useState('all');
     const memberUsers = useMemo(() => users.filter(u => u.role === 'member'), [users]);
     const approvedMembers = useMemo(() => memberUsers.filter(u => u.status === 'approved'), [memberUsers]);
-    const paidPayments = useMemo(() => payments.filter(p => p.status === 'paid'), [payments]);
+    const allPaidPayments = useMemo(() => payments.filter(p => p.status === 'paid'), [payments]);
     const overduePayments = useMemo(() => payments.filter(p => p.status === 'overdue'), [payments]);
+    const paidPayments = useMemo(() => {
+        if (timeFilter === 'all') return allPaidPayments;
+        const now = Date.now();
+        const cutoff = timeFilter === 'month' ? now - 30 * 86400000 : now - 90 * 86400000;
+        return allPaidPayments.filter(p => {
+            const d = new Date(p.paymentDate || p.date);
+            return !Number.isNaN(d.getTime()) && d.getTime() >= cutoff;
+        });
+    }, [allPaidPayments, timeFilter]);
     const totalExpectedLifecycle = useMemo(() => groups.reduce((sum, g) => {
         const contribution = Number(g.contributionAmount || g.contribution || 0);
         const membersCount = Array.isArray(g.members) ? g.members.length : 0;
         const rounds = Number(g.totalRounds || g.totalSlots || membersCount || 1);
         return sum + contribution * membersCount * rounds;
     }, 0), [groups]);
+    // Expected to date: currentRound rounds × members × contribution per group
+    const totalExpectedToDate = useMemo(() => groups.reduce((sum, g) => {
+        const contribution = Number(g.contributionAmount || g.contribution || 0);
+        const membersCount = Array.isArray(g.members) ? g.members.length : 0;
+        const roundsDone = Number(g.currentRound || 0);
+        return sum + contribution * membersCount * roundsDone;
+    }, 0), [groups]);
+    const totalPaidOut = useMemo(() =>
+        schedule.filter(p => p.status === 'completed' || p.paid)
+                .reduce((sum, p) => sum + Number(p.payoutAmount || p.amount || 0), 0),
+    [schedule]);
     const totalCollected = paidPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-    const collectionRate = totalExpectedLifecycle > 0
-        ? Math.min(100, Math.round((totalCollected / totalExpectedLifecycle) * 100))
+    const allTimeCollected = allPaidPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+    const netPosition = allTimeCollected - totalPaidOut;
+    // Collection rate against what was actually due to date, not the full lifecycle
+    const collectionRate = totalExpectedToDate > 0
+        ? Math.min(100, Math.round((allTimeCollected / totalExpectedToDate) * 100))
         : 0;
     const { trendDelta, trendChartData } = useMemo(() => {
         const now = new Date();
@@ -70,6 +105,38 @@ export function Dashboard({ user, onNavigate }) {
     });
     const pendingCount = payments.filter(p => p.status === 'pending').length;
     const defaulterCount = new Set(overduePayments.map(p => p.userId || p.memberId)).size;
+
+    // Next payment due dates per group
+    const upcomingDueDates = useMemo(() => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return groups
+            .filter(g => (g.currentRound || 0) < (g.totalRounds || g.totalSlots || Infinity))
+            .map(g => {
+                const freq = String(g.frequency || '').toLowerCase();
+                const daysPerRound = freq.includes('week') ? 7 : freq.includes('day') ? 1 : 30;
+                const due = new Date(today);
+                due.setDate(today.getDate() + daysPerRound);
+                const daysLeft = Math.round((due.getTime() - today.getTime()) / 86400000);
+                return { id: g.id, name: g.groupName || g.name || 'Group', daysLeft, amount: g.contributionAmount || g.contribution || 0, dueDate: due };
+            })
+            .sort((a, b) => a.daysLeft - b.daysLeft)
+            .slice(0, 3);
+    }, [groups]);
+
+    // Collector: assigned groups with pending payment counts
+    const collectorGroups = useMemo(() => {
+        if (user?.role !== 'collector') return [];
+        const assignedIds = user.assignedGroups || [];
+        return groups
+            .filter(g => assignedIds.includes(g.id))
+            .map(g => {
+                const members = Array.isArray(g.members) ? g.members : [];
+                const pending = payments.filter(p => p.groupId === g.id && p.status === 'pending').length;
+                const collected = payments.filter(p => p.groupId === g.id && p.status === 'paid').reduce((s, p) => s + Number(p.amount || 0), 0);
+                return { ...g, memberCount: members.length, pending, collected };
+            });
+    }, [user, groups, payments]);
     const statusPill = (status) => {
         if (status === 'paid')
             return 'bg-success/15 text-success';
@@ -77,7 +144,7 @@ export function Dashboard({ user, onNavigate }) {
             return 'bg-primary/15 text-primary';
         return 'bg-destructive/15 text-destructive';
     };
-    return (<div className="pb-28 page-enter">
+    return (<div className="pb-[calc(7rem+env(safe-area-inset-bottom,0px))] page-enter">
       <div className="px-4 sm:px-6 md:px-8 pt-4 sm:pt-6 pb-4 sm:pb-5 flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-4">
         <div>
           <div className="flex items-center gap-1.5 mb-1.5">
@@ -86,7 +153,7 @@ export function Dashboard({ user, onNavigate }) {
           </div>
 
           <h1 className="text-2xl font-bold text-foreground mb-1">
-            Morning, <span className="text-primary">{user.name.split(' ')[0]}</span>
+            {greeting()}, <span className="text-primary">{(() => { const n = (user.fullName || user.name || '').split(' ')[0]; return (n && !n.includes('.') && !n.includes('@')) ? n : 'there'; })()}</span>
           </h1>
 
           <p className="body text-muted-foreground">
@@ -94,12 +161,21 @@ export function Dashboard({ user, onNavigate }) {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto">
-          <button onClick={() => onNavigate?.('payments')} className={cn('h-9 px-3.5 rounded-lg app-control', 'flex flex-1 sm:flex-none items-center justify-center gap-1.5', 'bg-accent border border-border', 'hover:bg-accent/80 transition-colors duration-150', 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60')}>
+        <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto flex-wrap">
+          <div className="flex rounded-lg border border-border bg-card/70 p-0.5 flex-1 sm:flex-none">
+            {TIME_FILTERS.map(f => (
+              <button key={f.id} type="button" onClick={() => setTimeFilter(f.id)}
+                className={cn('px-2.5 py-1 rounded-md app-tab whitespace-nowrap transition-colors text-xs',
+                  timeFilter === f.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50')}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => onNavigate?.('payments')} className={cn('h-9 px-3.5 rounded-lg app-control', 'flex items-center justify-center gap-1.5', 'bg-accent border border-border', 'hover:bg-accent/80 transition-colors duration-150', 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60')}>
             <History className="w-3.5 h-3.5 text-primary"/>
             <span>Activity</span>
           </button>
-          <button onClick={() => onNavigate?.('analytics')} className={cn('h-9 px-3.5 rounded-lg app-control', 'flex flex-1 sm:flex-none items-center justify-center gap-1.5', 'bg-primary text-primary-foreground', 'hover:opacity-90 active:scale-95 transition-all duration-150', 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60')}>
+          <button onClick={() => onNavigate?.('analytics')} className={cn('h-9 px-3.5 rounded-lg app-control', 'flex items-center justify-center gap-1.5', 'bg-primary text-primary-foreground', 'hover:opacity-90 active:scale-95 transition-all duration-150', 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60')}>
             <Zap className="w-3.5 h-3.5"/>
             <span>Reports</span>
           </button>
@@ -108,7 +184,7 @@ export function Dashboard({ user, onNavigate }) {
 
       <div className="px-4 sm:px-6 md:px-8 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5">
         <div className="lg:col-span-8 space-y-6">
-          <div className="elevation-2 rounded-xl overflow-hidden">
+          <div className="bg-card rounded-xl border border-border shadow-[var(--shadow-sm)] overflow-hidden bg-gradient-to-br from-primary/[0.04] to-transparent">
             <div className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
 
               <div className="space-y-4">
@@ -117,7 +193,7 @@ export function Dashboard({ user, onNavigate }) {
                     <span className="app-badge text-primary/70" aria-hidden="true">₵</span>
                     <span className="eyebrow text-primary/70">Total pool collected</span>
                   </div>
-                  <p className="text-2xl font-semibold text-foreground tracking-tight stat-value leading-none break-words">
+                  <p className="text-2xl font-semibold text-foreground tracking-tight stat-value leading-none break-words select-none">
                     {fmt(totalCollected)}
                   </p>
                 </div>
@@ -163,12 +239,25 @@ export function Dashboard({ user, onNavigate }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-            <StatCard title="Active Groups" value={groups.length} icon={Users2} iconColor="bg-primary/15 text-primary" subtitle="Managed hubs"/>
-            <StatCard title="Verified Members" value={approvedMembers.length} icon={Users} iconColor="bg-primary/10 text-primary/80" subtitle={`${memberUsers.length} total`}/>
-            <StatCard title="Collection Rate" value={`${collectionRate}%`} icon={CheckCircle} iconColor="bg-success/15 text-success" trend={{ value: `${trendDelta}%`, isPositive: trendDelta >= 0 }}/>
-            <StatCard title="Defaulters" value={defaulterCount} icon={AlertCircle} iconColor="bg-destructive/15 text-destructive" subtitle={`${overduePayments.length} overdue`}/>
-          </div>
+          {!appReady ? (
+            <div className="grid grid-cols-2 xl:grid-cols-5 gap-3 sm:gap-4">
+              {[0,1,2,3,4].map(i => (
+                <div key={i} className="bg-card rounded-xl border border-border p-4 sm:p-5 animate-pulse">
+                  <div className="w-8 h-8 rounded-lg bg-muted mb-3"/>
+                  <div className="h-6 bg-muted rounded w-3/4 mb-2"/>
+                  <div className="h-3 bg-muted/60 rounded w-1/2"/>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 xl:grid-cols-5 gap-3 sm:gap-4">
+              <StatCard title="Active Groups" value={groups.length} icon={Users2} iconColor="bg-primary/15 text-primary" subtitle="Managed hubs"/>
+              <StatCard title="Verified Members" value={approvedMembers.length} icon={Users} iconColor="bg-primary/10 text-primary/80" subtitle={`${memberUsers.length} total`}/>
+              <StatCard title="Collection Rate" value={`${collectionRate}%`} icon={CheckCircle} iconColor="bg-success/15 text-success" trend={{ value: `${trendDelta}%`, isPositive: trendDelta >= 0 }}/>
+              <StatCard title="Net Position" value={fmt(netPosition)} icon={Wallet} iconColor={netPosition >= 0 ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"} subtitle="Collected minus paid out"/>
+              <StatCard title="Defaulters" value={defaulterCount} icon={AlertCircle} iconColor="bg-destructive/15 text-destructive" subtitle={`${overduePayments.length} overdue`}/>
+            </div>
+          )}
 
           <section className="elevation-3 rounded-xl p-4 sm:p-5">
             <div className="flex items-center justify-between mb-4">
@@ -183,12 +272,28 @@ export function Dashboard({ user, onNavigate }) {
             </div>
 
             <div className="space-y-2">
-              {recentPayments.length === 0 ? (<div className="py-10 text-center">
+              {!appReady ? (
+                <div className="space-y-2">
+                  {[0,1,2,3].map(i => (
+                    <div key={i} className="flex items-center gap-3.5 p-3.5 rounded-xl animate-pulse">
+                      <div className="w-10 h-10 rounded-xl bg-muted flex-shrink-0"/>
+                      <div className="flex-1 space-y-1.5">
+                        <div className="h-3.5 bg-muted rounded w-2/5"/>
+                        <div className="h-3 bg-muted/60 rounded w-1/4"/>
+                      </div>
+                      <div className="text-right space-y-1.5">
+                        <div className="h-3.5 bg-muted rounded w-14"/>
+                        <div className="h-3 bg-muted/60 rounded w-10 ml-auto"/>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : recentPayments.length === 0 ? (<div className="py-10 text-center">
                   <p className="eyebrow text-muted-foreground">No recent transactions recorded</p>
                 </div>) : recentPayments.map((payment) => (<div key={payment.id} className={cn('group flex items-center justify-between gap-3 p-3.5 rounded-xl', 'border border-transparent hover:border-border hover:bg-accent/40', 'transition-all duration-200')}>
                   <div className="flex items-center gap-3.5">
                     <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', 'font-bold text-sm flex-shrink-0', 'transition-transform duration-200 group-hover:scale-105', statusPill(payment.status))}>
-                      {payment.memberName.charAt(0).toUpperCase()}
+                      {(payment.memberName || '?').charAt(0).toUpperCase()}
                     </div>
                     <div>
                       <p className="body-strong text-foreground group-hover:text-primary transition-colors truncate">
@@ -281,7 +386,88 @@ export function Dashboard({ user, onNavigate }) {
               Manage payout pipeline
             </button>
           </section>
+
+          {upcomingDueDates.length > 0 && (
+            <section className="elevation-3 rounded-xl p-4 sm:p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="section-title text-foreground">Upcoming payments</h3>
+                  <p className="eyebrow text-muted-foreground mt-0.5">Next contribution due</p>
+                </div>
+                <Clock className="w-4 h-4 text-muted-foreground" aria-hidden="true"/>
+              </div>
+              <div className="space-y-2.5">
+                {upcomingDueDates.map(item => (
+                  <div key={item.id} className="flex items-center justify-between p-3 rounded-xl bg-accent/50 border border-border">
+                    <div className="min-w-0">
+                      <p className="body-strong text-foreground truncate">{item.name}</p>
+                      <p className="eyebrow text-muted-foreground mt-0.5">
+                        {item.daysLeft === 0 ? 'Due today' : item.daysLeft === 1 ? 'Due tomorrow' : `Due in ${item.daysLeft} days`}
+                      </p>
+                    </div>
+                    <div className="text-right flex-shrink-0 ml-3">
+                      <p className="body-strong text-primary">{fmt(item.amount)}</p>
+                      <div className={cn(
+                        'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-medium mt-0.5',
+                        item.daysLeft <= 3 ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'
+                      )}>
+                        <Clock className="w-2.5 h-2.5" aria-hidden="true"/>
+                        <span>{item.daysLeft}d</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       </div>
+
+      {collectorGroups.length > 0 && (
+        <div className="px-4 sm:px-6 md:px-8 mt-4 sm:mt-5">
+          <section className="elevation-3 rounded-xl p-4 sm:p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="section-title text-foreground">My collections</h3>
+                <p className="eyebrow text-muted-foreground mt-0.5">Assigned groups overview</p>
+              </div>
+              <button onClick={() => onNavigate?.('payments')} className={cn(
+                'h-8 px-3 rounded-lg app-control flex items-center gap-1.5',
+                'bg-primary text-primary-foreground text-xs font-medium',
+                'hover:opacity-90 transition-opacity',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60'
+              )}>
+                <Banknote className="w-3.5 h-3.5"/>
+                Collect payments
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {collectorGroups.map(g => (
+                <div key={g.id} className="p-4 rounded-xl border border-border bg-accent/30 hover:bg-accent/50 transition-colors">
+                  <div className="flex items-start justify-between mb-3">
+                    <p className="body-strong text-foreground truncate flex-1 mr-2">{g.groupName || g.name}</p>
+                    {g.pending > 0 && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-destructive/10 text-destructive text-xs font-medium flex-shrink-0">
+                        <AlertCircle className="w-3 h-3"/>
+                        {g.pending} pending
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="eyebrow text-muted-foreground">Members</p>
+                      <p className="body-strong text-foreground mt-0.5">{g.memberCount}</p>
+                    </div>
+                    <div>
+                      <p className="eyebrow text-muted-foreground">Collected</p>
+                      <p className="body-strong text-primary mt-0.5">{fmt(g.collected)}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
     </div>);
 }

@@ -9,23 +9,23 @@ import { MobileNavigation } from "./components/MobileNavigation";
 import { RoleGuard } from "./security";
 // Domain modals invoked from the global shell
 import { PayModal, QuickActionSheet, MemberDrawer, NotificationsPanel } from "./components/domain";
-import { Dashboard } from "./pages/Dashboard";
-import { MemberPortal } from "./pages/MemberPortal";
-import { Reminders } from "./pages/Reminders";
-import { Analytics } from "./pages/Analytics";
-import { Members } from "./pages/Members";
-import { Groups } from "./pages/Groups";
-import { Payments } from "./pages/Payments";
-import { Defaulters } from "./pages/Defaulters";
-import { PayoutSchedule } from "./pages/PayoutSchedule";
-import { Leaderboard } from "./pages/Leaderboard";
-import { GroupChat } from "./pages/GroupChat";
-import { Settings } from "./pages/Settings";
-import { AuditLogs } from "./pages/AuditLogs";
-import { Receipts } from "./pages/Receipts";
-import { Profile } from "./pages/Profile";
-import AuthScreen from "./pages/AuthScreen";
-import { BioScreen } from "./pages/BioScreen";
+const Dashboard     = React.lazy(() => import("./pages/Dashboard").then(m => ({ default: m.Dashboard })));
+const MemberPortal  = React.lazy(() => import("./pages/MemberPortal").then(m => ({ default: m.MemberPortal })));
+const Reminders     = React.lazy(() => import("./pages/Reminders").then(m => ({ default: m.Reminders })));
+const Analytics     = React.lazy(() => import("./pages/Analytics").then(m => ({ default: m.Analytics })));
+const Members       = React.lazy(() => import("./pages/Members").then(m => ({ default: m.Members })));
+const Groups        = React.lazy(() => import("./pages/Groups").then(m => ({ default: m.Groups })));
+const Payments      = React.lazy(() => import("./pages/Payments").then(m => ({ default: m.Payments })));
+const Defaulters    = React.lazy(() => import("./pages/Defaulters").then(m => ({ default: m.Defaulters })));
+const PayoutSchedule = React.lazy(() => import("./pages/PayoutSchedule").then(m => ({ default: m.PayoutSchedule })));
+const Leaderboard   = React.lazy(() => import("./pages/Leaderboard").then(m => ({ default: m.Leaderboard })));
+const GroupChat     = React.lazy(() => import("./pages/GroupChat").then(m => ({ default: m.GroupChat })));
+const Settings      = React.lazy(() => import("./pages/Settings").then(m => ({ default: m.Settings })));
+const AuditLogs     = React.lazy(() => import("./pages/AuditLogs").then(m => ({ default: m.AuditLogs })));
+const Receipts      = React.lazy(() => import("./pages/Receipts").then(m => ({ default: m.Receipts })));
+const Profile       = React.lazy(() => import("./pages/Profile").then(m => ({ default: m.Profile })));
+const Calendar      = React.lazy(() => import("./pages/Calendar").then(m => ({ default: m.Calendar })));
+const AuthScreen    = React.lazy(() => import("./pages/AuthScreen"));
 import { signOut as signOutUser } from "./services/authService";
 import { mobileNavHidden } from "./services/uiBus";
 // Context
@@ -33,9 +33,8 @@ import { useAppContext } from "./context/AppContext";
 import { useSessionTimeout } from "./hooks/useSessionTimeout";
 import { SessionTimeoutModal } from "./components/SessionTimeoutModal";
 export default function App() {
-    const { authUser, setAuthUser, users, payments, groups, reminders, settings, dismissedNotifications, registerMember, logAudit } = useAppContext();
+    const { authUser, setAuthUser, users, payments, groups, reminders, settings, dismissedNotifications, registerMember, logAudit, connectionTimedOut } = useAppContext();
     const [page, setPage] = useState("dashboard");
-    const [showBio, setShowBio] = useState(false);
     const [payOpen, setPayOpen] = useState(false);
     const [quickActionsOpen, setQuickActionsOpen] = useState(false);
     const [profileDrawerOpen, setProfileDrawerOpen] = useState(false);
@@ -56,6 +55,7 @@ export default function App() {
         receipts: "Receipts",
         profile: "Profile",
         reminders: "Reminders",
+        calendar: "Calendar",
     };
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [globalSearch, setGlobalSearch] = useState("");
@@ -90,6 +90,10 @@ export default function App() {
             return "defaulters";
         if (/audit|log|history/.test(term))
             return "audit";
+        if (/reminder|notification|alert/.test(term))
+            return "reminders";
+        if (/calendar|schedule|due date|upcoming/.test(term))
+            return "calendar";
         if (/pay|momo|cash|bank/.test(term))
             return "payments";
         return "members";
@@ -115,7 +119,7 @@ export default function App() {
     }, [effectivePage]);
     if (!authUser) {
         return (<Suspense fallback={<PageFallback />}>
-        {showBio ? (<BioScreen onSuccess={(u) => { setAuthUser(u); setShowBio(false); }} onFallback={() => setShowBio(false)}/>) : (<AuthScreen onLogin={(u) => setAuthUser(u)} onBio={() => setShowBio(true)} onRegister={handleRegister} registrationGroups={groups}/>)}
+        <AuthScreen onLogin={(u) => setAuthUser(u)} onRegister={handleRegister} registrationGroups={groups}/>
       </Suspense>);
     }
     const pendingRegistrations = users.filter(user => user.role === "member" && user.status === "pending" && !dismissedNotifications.members.includes(user.id)).length;
@@ -153,6 +157,7 @@ export default function App() {
                 case "audit": return <AuditLogs />;
                 case "receipts": return <Receipts />;
                 case "reminders": return <Reminders />;
+                case "calendar": return <Calendar />;
                 case "profile": return <Profile user={authUser} onNavigate={setPage} onLogout={handleLogout}/>;
                 default: return <Dashboard user={authUser} onNavigate={setPage}/>;
             }
@@ -162,14 +167,24 @@ export default function App() {
     return (<div className="flex h-[100dvh] w-full bg-background overflow-hidden">
         <Sidebar activePage={effectivePage} onNavigate={(p) => setPage(p)} user={authUser} onLogout={handleLogout} className="hidden md:flex"/>
 
-        {sidebarOpen && (<div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-md md:hidden" onClick={() => setSidebarOpen(false)}/>)}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 z-40 bg-black/65 backdrop-blur-sm md:hidden animate-in fade-in duration-200"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close menu"
+          />
+        )}
 
-        {sidebarOpen && (<div className="fixed inset-y-0 left-0 z-50 md:hidden">
-            <Sidebar activePage={effectivePage} onNavigate={(p) => {
-                setPage(p);
-                setSidebarOpen(false);
-            }} user={authUser} onLogout={handleLogout}/>
-          </div>)}
+        {sidebarOpen && (
+          <div className="fixed inset-y-0 left-0 z-50 md:hidden animate-in slide-in-from-left-4 duration-300">
+            <Sidebar
+              activePage={effectivePage}
+              onNavigate={(p) => { setPage(p); setSidebarOpen(false); }}
+              user={authUser}
+              onLogout={handleLogout}
+            />
+          </div>
+        )}
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -184,6 +199,10 @@ export default function App() {
               {isOffline && (<div role="status" aria-live="polite" className="bg-destructive/10 text-destructive px-6 md:px-10 py-3 text-xs font-semibold flex items-center gap-2 border-b border-destructive/20 uppercase tracking-wide">
                   <ShieldAlert className="w-4 h-4 flex-shrink-0" aria-hidden="true"/>
                   <span>No internet connection — working offline</span>
+                </div>)}
+              {!isOffline && connectionTimedOut && (<div role="status" aria-live="polite" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 px-6 md:px-10 py-2.5 text-xs font-semibold flex items-center gap-2 border-b border-amber-500/20">
+                  <ShieldAlert className="w-4 h-4 flex-shrink-0" aria-hidden="true"/>
+                  <span>Slow connection — data may be delayed. Check your network.</span>
                 </div>)}
               <Suspense fallback={<PageFallback />}>{renderPage()}</Suspense>
           </main>
@@ -211,7 +230,9 @@ export default function App() {
         {quickActionsOpen && (<QuickActionSheet onClose={() => setQuickActionsOpen(false)} onNavigate={setPage}/>)}
 
         {profileDrawerOpen && authUser && (() => {
-            const fullUser = users.find(u => u.id === authUser.id) || authUser;
+            const fullUser = users.find(u => u.id === authUser.id)
+                || (authUser.email ? users.find(u => u.email?.toLowerCase() === authUser.email.toLowerCase()) : null)
+                || authUser;
             return (<MemberDrawer user={fullUser} onClose={() => setProfileDrawerOpen(false)}/>);
         })()}
 

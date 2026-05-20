@@ -66,14 +66,25 @@ export function getDefaulterRisk(payment, today = new Date()) {
     return { level: "High", daysOverdue: delta };
 }
 export function calculateFinancialMetrics({ payments = [], groups = [], payouts = [], users = [] }) {
-    // Build a set of approved member IDs so we only count their overdue payments
-    // in the default rate — suspended/rejected members should not inflate it.
     const activeMemberIds = users.length > 0
         ? new Set(users.filter(u => u.status === "approved").map(u => String(u.id)))
         : null;
     const totalPaid = payments.filter(p => p.status === "paid").reduce((sum, p) => sum + normalizeMoney(p.amount), 0);
     const totalOverdue = payments.filter(p => p.status === "overdue").reduce((sum, p) => sum + normalizeMoney(p.amount), 0);
-    const expected = groups.reduce((sum, g) => {
+
+    // Expected to date: use currentRound (rounds completed so far) not totalRounds,
+    // so a group in round 3 of 12 shows 3/12ths of its lifecycle as expected — not all 12.
+    const expectedToDate = groups.reduce((sum, g) => {
+        const contribution = normalizeMoney(g.contributionAmount || g.contribution);
+        const memberCount = Array.isArray(g.members)
+            ? g.members.length
+            : normalizeMoney(g.memberCount || g.totalSlots);
+        const roundsCompleted = normalizeMoney(g.currentRound || 0);
+        return sum + contribution * memberCount * roundsCompleted;
+    }, 0);
+
+    // Lifecycle total — kept for reference / outstanding calculation
+    const expectedLifecycle = groups.reduce((sum, g) => {
         const contribution = normalizeMoney(g.contributionAmount || g.contribution);
         const memberCount = Array.isArray(g.members)
             ? g.members.length
@@ -81,20 +92,25 @@ export function calculateFinancialMetrics({ payments = [], groups = [], payouts 
         const rounds = normalizeMoney(g.totalRounds || g.totalSlots || memberCount);
         return sum + contribution * memberCount * rounds;
     }, 0);
+
     const totalPaidOut = payouts.filter(p => p.status === "completed" || p.paid).reduce((sum, p) => sum + normalizeMoney(p.payoutAmount || p.amount), 0);
-    const expectedPayments = payments.length || 1;
-    const overduePayments = payments.filter(p => {
+
+    // Only count actionable payment records (exclude draft/cancelled states)
+    const actionablePayments = payments.filter(p => ["paid", "pending", "overdue"].includes(p.status));
+    const overduePayments = actionablePayments.filter(p => {
         if (p.status !== "overdue") return false;
         if (!activeMemberIds) return true;
         return activeMemberIds.has(String(p.userId || p.memberId));
     }).length;
+
     return {
         totalPaid,
-        totalExpected: expected,
-        totalOutstanding: Math.max(0, expected - totalPaid),
+        totalExpected: expectedToDate,
+        totalExpectedLifecycle: expectedLifecycle,
+        totalOutstanding: Math.max(0, expectedToDate - totalPaid),
         totalOverdue,
         netPosition: totalPaid - totalPaidOut,
-        collectionRate: expected ? (totalPaid / expected) * 100 : 0,
-        defaultRate: (overduePayments / expectedPayments) * 100,
+        collectionRate: expectedToDate > 0 ? (totalPaid / expectedToDate) * 100 : 0,
+        defaultRate: actionablePayments.length > 0 ? (overduePayments / actionablePayments.length) * 100 : 0,
     };
 }

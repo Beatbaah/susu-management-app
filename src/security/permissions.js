@@ -43,6 +43,7 @@ export const PAGE_PERMISSIONS = {
     audit: 'viewAuditLogs',
     receipts: 'viewDashboard',
     profile: 'viewDashboard',
+    calendar: 'viewDashboard',
 };
 export function canAccess(role, permission) {
     if (!permission)

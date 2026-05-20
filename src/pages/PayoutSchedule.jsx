@@ -1,4 +1,4 @@
-import { Calendar, List, CalendarDays, Users } from 'lucide-react';
+import { Calendar, List, CalendarDays, Users, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { SkeletonList } from '../components/ui/LoadingState';
 import { PayoutCard } from '../components/domain';
@@ -73,6 +73,7 @@ export function PayoutSchedule() {
           Change Recipient
         </button>
         <button type="button" onClick={() => {
+                if (!window.confirm(`Mark payout to ${payout.memberName} as completed? This cannot be undone.`)) return;
                 const result = completePayout(payout.id);
                 if (result?.ok === false)
                     toast.error(result.message || 'Could not complete payout');
@@ -83,16 +84,22 @@ export function PayoutSchedule() {
         </button>
       </div>);
     };
-    return (<div className="pb-28 page-enter">
+    return (<div className="pb-[calc(7rem+env(safe-area-inset-bottom,0px))] page-enter">
       <div className="px-4 sm:px-6 pt-5 sm:pt-6 pb-4">
-        <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-start justify-between gap-3 mb-4">
           <div className="min-w-0">
-            <h1 className="app-title text-foreground">Payouts</h1>
-            <p className="app-caption text-muted-foreground mt-1 truncate">Scheduled group disbursements</p>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-primary/20 flex items-center justify-center">
+                <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary"/>
+              </div>
+              <p className="eyebrow text-muted-foreground">Disbursements</p>
+            </div>
+            <h1 className="text-2xl font-bold text-foreground mb-1">Payouts</h1>
+            <p className="text-muted-foreground text-sm">Manage and assign susu cycle payouts.</p>
           </div>
-          <button type="button" onClick={() => setView(v => (v === 'list' ? 'calendar' : 'list'))} className="h-10 px-3.5 rounded-xl bg-card/70 border border-border app-control text-foreground/75 hover:text-foreground transition-colors flex items-center gap-2 flex-shrink-0">
-            {view === 'list' ? <CalendarDays className="w-4 h-4"/> : <List className="w-4 h-4"/>}
-            {view === 'list' ? 'Calendar' : 'List'}
+          <button type="button" onClick={() => setView(v => (v === 'list' ? 'calendar' : 'list'))} aria-label={view === 'list' ? 'Switch to calendar view' : 'Switch to list view'} className="h-10 w-10 sm:w-auto sm:px-3.5 rounded-xl bg-card/70 border border-border app-control text-foreground/75 hover:text-foreground transition-colors flex items-center justify-center gap-2 flex-shrink-0">
+            {view === 'list' ? <CalendarDays className="w-4 h-4" aria-hidden="true"/> : <List className="w-4 h-4" aria-hidden="true"/>}
+            <span className="hidden sm:inline">{view === 'list' ? 'Calendar' : 'List'}</span>
           </button>
         </div>
 
@@ -107,7 +114,7 @@ export function PayoutSchedule() {
           <div className="min-w-0 px-2.5 py-2 border-r border-border">
             <div className="relative z-10">
               <p className="app-value text-primary">{pending.length}</p>
-              <p className="app-caption text-muted-foreground mt-1.5 truncate">In progress</p>
+              <p className="app-caption text-muted-foreground mt-1.5 truncate"><span className="sm:hidden">Active</span><span className="hidden sm:inline">In progress</span></p>
               <p className="app-caption text-primary/80 font-semibold mt-1 truncate">{fmt(totalPendingAmount)}</p>
             </div>
           </div>
@@ -139,12 +146,12 @@ export function PayoutSchedule() {
             ))}
           </div>
         )}
-        {!appReady && payoutsWithDetails.length === 0 ? (<SkeletonList count={3}/>) : payoutsWithDetails.length === 0 ? (<div className="rounded-xl border border-dashed border-border p-12 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-5 text-primary/40">
-              <Calendar className="w-10 h-10"/>
+        {!appReady && payoutsWithDetails.length === 0 ? (<SkeletonList count={3}/>) : payoutsWithDetails.length === 0 ? (<div className="glass-card rounded-xl border border-border p-10 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4 text-primary/50">
+              <Calendar className="w-8 h-8"/>
             </div>
-            <h3 className="text-xl font-bold text-foreground">No Payouts Yet</h3>
-            <p className="text-muted-foreground text-sm font-medium mt-2">Payouts will appear here when groups complete their rounds.</p>
+            <h3 className="text-lg font-bold text-foreground mb-1">No Payouts Yet</h3>
+            <p className="text-muted-foreground text-sm">Payouts will appear here when groups complete their rounds.</p>
           </div>) : view === 'calendar' ? (<CalendarView payouts={payoutsWithDetails}/>) : filteredPayouts.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground text-sm">
               No {statusFilter === 'unassigned' ? 'unassigned' : statusFilter === 'pending' ? 'in-progress' : statusFilter === 'completed' ? 'completed' : ''} payouts.
@@ -212,6 +219,7 @@ export function PayoutSchedule() {
                                 </button>
                                 <button type="button"
                                   onClick={() => {
+                                    if (!window.confirm(`Mark payout to ${payout.memberName} as completed?`)) return;
                                     const result = completePayout(payout.id);
                                     if (result?.ok === false) toast.error(result.message || 'Could not complete payout');
                                     else toast.success(`Payout to ${payout.memberName} marked completed`);
@@ -243,37 +251,42 @@ export function PayoutSchedule() {
           )}
       </div>
 
-      {assigningPayout && (<div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setAssigningPayout(null)}>
-          <div className="w-full sm:max-w-md bg-card border border-border rounded-t-3xl sm:rounded-3xl p-6" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-11 h-11 rounded-2xl bg-primary/15 text-primary flex items-center justify-center">
-                <Users className="w-5 h-5"/>
+      {assigningPayout && (<div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setAssigningPayout(null)}>
+          <div className="w-full max-w-md bg-card border border-border rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 pt-4 pb-4 border-b border-border/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center">
+                  <Users className="w-5 h-5"/>
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-foreground">Assign Recipient</h2>
+                  <p className="text-xs text-muted-foreground">
+                    {assigningPayout.groupName} · Round {assigningPayout.round}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-lg font-bold text-foreground">Assign Recipient</h2>
-                <p className="text-xs text-muted-foreground font-medium">
-                  {assigningPayout.groupName} · Round {assigningPayout.round}
-                </p>
-              </div>
+              <button type="button" onClick={() => setAssigningPayout(null)} className="w-8 h-8 rounded-xl bg-muted/50 flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors" aria-label="Close">
+                <X className="w-4 h-4"/>
+              </button>
             </div>
 
-            <label className="block text-xs uppercase tracking-wide font-bold text-muted-foreground mb-2">
-              Member
-            </label>
-            <select value={selectedRecipient} onChange={(event) => setSelectedRecipient(event.target.value)} className="w-full rounded-2xl bg-background border border-border px-4 py-3 text-sm text-foreground outline-none focus:border-primary">
-              <option value="">Select a member</option>
-              {users
-                .filter(member => member.role === 'member' && member.status === 'approved' && String(member.groupId) === String(assigningPayout.groupId))
-                .map(member => (<option key={member.id} value={member.id}>
-                    {member.fullName || member.name}
-                  </option>))}
-            </select>
+            <div className="px-5 py-4">
+              <label className="text-xs font-medium text-foreground/70 mb-1.5 block">Member</label>
+              <select value={selectedRecipient} onChange={(event) => setSelectedRecipient(event.target.value)} className="w-full bg-card border-2 border-border rounded-xl px-4 py-3.5 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-colors">
+                <option value="">Select a member</option>
+                {users
+                  .filter(member => member.role === 'member' && member.status === 'approved' && String(member.groupId) === String(assigningPayout.groupId))
+                  .map(member => (<option key={member.id} value={member.id}>
+                      {member.fullName || member.name}
+                    </option>))}
+              </select>
+            </div>
 
-            <div className="grid grid-cols-2 gap-3 mt-6">
-              <button type="button" onClick={() => setAssigningPayout(null)} className="rounded-2xl bg-border text-foreground/70 py-3 text-xs font-bold uppercase tracking-wide hover:bg-accent transition-colors">
+            <div className="flex gap-3 px-5 py-4 border-t border-border/50 bg-card">
+              <button type="button" onClick={() => setAssigningPayout(null)} className="flex-1 rounded-xl bg-muted border border-border py-3.5 text-sm font-semibold text-foreground/70 hover:text-foreground transition-colors">
                 Cancel
               </button>
-              <button type="button" disabled={!selectedRecipient} onClick={handleAssignRecipient} className="rounded-2xl bg-primary text-foreground py-3 text-xs font-bold uppercase tracking-wide disabled:opacity-40 disabled:cursor-not-allowed">
+              <button type="button" disabled={!selectedRecipient} onClick={handleAssignRecipient} className="flex-[1.5] rounded-xl bg-primary text-primary-foreground py-3.5 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all">
                 Assign
               </button>
             </div>
@@ -301,7 +314,7 @@ function CalendarView({ payouts }) {
     };
     const sortedKeys = Array.from(buckets.keys()).sort();
     if (sortedKeys.length === 0) {
-        return (<div className="glass-card rounded-[2.5rem] border border-dashed border-border p-16 text-center text-muted-foreground text-sm font-medium">
+        return (<div className="bg-card rounded-2xl border border-dashed border-border p-12 text-center text-muted-foreground text-sm font-medium">
         No scheduled dates to display in calendar.
       </div>);
     }
@@ -320,11 +333,11 @@ function CalendarView({ payouts }) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-foreground font-bold truncate text-sm">{p.memberName}</p>
-                  <p className="text-xs text-muted-foreground uppercase font-bold tracking-widest mt-0.5 truncate">{p.groupName} · Round {p.round}</p>
+                  <p className="eyebrow text-muted-foreground mt-0.5 truncate">{p.groupName} · Round {p.round}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-foreground font-bold text-sm tabular-nums">{p.scheduledDate}</p>
-                  <p className={cn("text-xs font-bold uppercase tracking-widest mt-0.5", p.status === 'completed' || p.paid ? 'text-success/60' : 'text-primary/60')}>
+                  <p className={cn("eyebrow mt-0.5", p.status === 'completed' || p.paid ? 'text-success/60' : 'text-primary/60')}>
                     {p.status === 'completed' || p.paid ? 'Completed' : 'Scheduled'}
                   </p>
                 </div>

@@ -1,5 +1,5 @@
 import { Trophy, Medal, Award, Star, Crown, Flame } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { fmt } from '../utils/helpers';
 import { cn } from '../components/ui/utils';
@@ -44,15 +44,25 @@ export function Leaderboard() {
         });
         return computed.sort((a, b) => b.points - a.points || b.amount - a.amount).map((item, idx) => ({ ...item, rank: idx + 1 }));
     }, [users, payments, groups]);
-    const meRank = rankings.find(r => r.id === authUser?.id);
-    const topThree = rankings.slice(0, 3);
-    const rest = rankings.slice(3, 10);
+    const groupOptions = useMemo(() => {
+        const seen = new Set();
+        const opts = [];
+        rankings.forEach(r => { if (r.group && !seen.has(r.group)) { seen.add(r.group); opts.push(r.group); } });
+        return opts;
+    }, [rankings]);
+    const [selectedGroup, setSelectedGroup] = useState('');
+    const visibleRankings = useMemo(() =>
+        selectedGroup ? rankings.filter(r => r.group === selectedGroup) : rankings,
+        [rankings, selectedGroup]);
+    const meRank = visibleRankings.find(r => r.id === authUser?.id);
+    const topThree = visibleRankings.slice(0, 3);
+    const rest = visibleRankings.slice(3);
     const rankCfg = {
         1: { iconBg: 'bg-gradient-to-br from-yellow-400 to-amber-500', text: 'text-yellow-400', Icon: Crown },
         2: { iconBg: 'bg-gradient-to-br from-slate-300 to-slate-500', text: 'text-slate-300', Icon: Medal },
         3: { iconBg: 'bg-gradient-to-br from-orange-400 to-orange-600', text: 'text-orange-400', Icon: Award },
     };
-    return (<div className="pb-28 page-enter">
+    return (<div className="pb-[calc(7rem+env(safe-area-inset-bottom,0px))] page-enter">
       <div className="px-4 sm:px-6 pt-5 sm:pt-6 pb-4">
         <div className="flex items-center justify-between mb-4 sm:mb-6">
           <div>
@@ -66,6 +76,22 @@ export function Leaderboard() {
             <p className="text-muted-foreground text-sm">Ranked by payment consistency and on-time delivery.</p>
           </div>
         </div>
+
+        {/* Group filter */}
+        {groupOptions.length > 1 && (
+          <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1 mb-4 sm:mb-6">
+            <button type="button" onClick={() => setSelectedGroup('')}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors border ${!selectedGroup ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:text-foreground'}`}>
+              All Groups
+            </button>
+            {groupOptions.map(g => (
+              <button key={g} type="button" onClick={() => setSelectedGroup(g)}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors border ${selectedGroup === g ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:text-foreground'}`}>
+                {g}
+              </button>
+            ))}
+          </div>
+        )}
 
         {meRank ? (<div className="relative overflow-hidden rounded-xl sm:rounded-2xl mb-4 sm:mb-6 border border-primary/20 bg-primary/[0.06]">
             <div className="relative p-4 sm:p-6">
@@ -81,7 +107,7 @@ export function Leaderboard() {
               <div className="grid grid-cols-3 gap-3 sm:gap-4 pt-4 border-t border-border">
                 {[['Payments', meRank.payments], ['Streak', `${meRank.streak}🔥`], ['Points', meRank.points]].map(([label, value]) => (<div key={label}>
                     <p className="eyebrow text-muted-foreground mb-1">{label}</p>
-                    <p className="text-base sm:text-lg font-bold text-foreground">{value}</p>
+                    <p className="text-base sm:text-lg font-bold text-foreground select-none tabular-nums">{value}</p>
                   </div>))}
               </div>
               {meRank.badges.length > 0 && (<div className="flex gap-2 mt-3 flex-wrap">
@@ -166,11 +192,11 @@ export function Leaderboard() {
           </div>
         </div>)}
 
-      {rankings.length === 0 && (<div className="px-6 md:px-10">
-          <div className="glass-card rounded-[2.5rem] border border-dashed border-border p-20 text-center">
-            <div className="w-20 h-20 rounded-3xl bg-yellow-400/10 flex items-center justify-center mx-auto mb-6 text-yellow-400/40"><Trophy className="w-10 h-10"/></div>
-            <h3 className="text-xl font-bold text-foreground">No Rankings Yet</h3>
-            <p className="text-muted-foreground text-sm font-medium mt-2">Members will appear here once they start contributing.</p>
+      {visibleRankings.length === 0 && (<div className="px-4 sm:px-6">
+          <div className="bg-card rounded-2xl border border-dashed border-border p-12 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-yellow-400/10 flex items-center justify-center mx-auto mb-4 text-yellow-400/40"><Trophy className="w-8 h-8"/></div>
+            <h3 className="text-lg font-bold text-foreground">No Rankings Yet</h3>
+            <p className="text-muted-foreground text-sm mt-1">Members will appear here once they start contributing.</p>
           </div>
         </div>)}
     </div>);

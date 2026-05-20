@@ -2,6 +2,8 @@ import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
+// FCM messaging is initialized lazily in pushNotificationService to avoid
+// throwing in browsers that don't support service workers / notifications.
 // Vite uses import.meta.env instead of process.env
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -12,6 +14,16 @@ const firebaseConfig = {
     appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 export const isFirebaseConfigured = Object.values(firebaseConfig).every(Boolean);
+
+// In a production build, missing Firebase env vars would silently enable demo
+// mode — any email/any password works. Fail fast instead.
+if (import.meta.env.PROD && !isFirebaseConfigured) {
+    throw new Error(
+        '[Excellent Susu] Firebase environment variables are missing. ' +
+        'Set VITE_FIREBASE_* vars before deploying — demo mode must not run in production.'
+    );
+}
+
 const app = isFirebaseConfigured ? initializeApp(firebaseConfig) : null;
 export const db = app ? getFirestore(app) : null;
 export const auth = app ? getAuth(app) : null;

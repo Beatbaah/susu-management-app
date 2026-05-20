@@ -18,7 +18,7 @@ export function SearchInput({ value, onChange, placeholder = 'Search…', id, la
 
       <Search aria-hidden="true" className={cn('absolute top-1/2 -translate-y-1/2 text-muted-foreground/50 group-focus-within:text-primary transition-colors pointer-events-none', size === 'sm' ? 'left-3 w-3.5 h-3.5' : 'left-3.5 w-4 h-4')}/>
 
-      <input id={inputId} type="search" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={cn('w-full rounded-xl bg-accent/50 border border-border', 'text-sm text-foreground placeholder:text-muted-foreground/50', 'focus:bg-accent focus:border-primary/40 focus:ring-4 focus:ring-primary/8', 'outline-none transition-all duration-200', size === 'sm'
+      <input id={inputId} type="search" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={cn('w-full rounded-xl bg-accent/50 border border-border', 'text-sm text-foreground placeholder:text-muted-foreground/50', 'focus:bg-accent focus:border-primary focus:ring-2 focus:ring-primary/10 focus:ring-4 focus:ring-primary/8', 'outline-none transition-all duration-200', size === 'sm'
             ? 'h-8 pl-9 pr-8 text-xs'
             : 'h-10 pl-10 pr-10')}/>
 

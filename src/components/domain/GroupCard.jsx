@@ -34,13 +34,27 @@ export function GroupCard({ groupName, memberCount, currentRound, totalSlots, co
         </div>
       </div>
 
-      <div className="mb-4 relative z-10">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="eyebrow text-muted-foreground">Cycle Progress</span>
+      <div className="mb-4 relative z-10 flex items-center justify-between">
+        <span className="eyebrow text-muted-foreground">Cycle Progress</span>
+        <div className="flex items-center gap-2">
           <span className="eyebrow text-muted-foreground">Round {currentRound} of {totalSlots}</span>
-        </div>
-        <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
-          <div className="h-full rounded-full progress-smooth" style={{ width: `${completionRate}%`, background: accent }}/>
+          {/* Circular progress ring */}
+          <div className="relative w-10 h-10 flex-shrink-0">
+            <svg width="40" height="40" className="-rotate-90" aria-hidden="true">
+              <circle cx="20" cy="20" r="16" fill="none" strokeWidth="4" stroke="var(--border)"/>
+              <circle
+                cx="20" cy="20" r="16" fill="none" strokeWidth="4"
+                stroke={accent}
+                strokeDasharray={`${2 * Math.PI * 16}`}
+                strokeDashoffset={`${2 * Math.PI * 16 * (1 - completionRate / 100)}`}
+                strokeLinecap="round"
+                style={{ transition: 'stroke-dashoffset 0.6s ease' }}
+              />
+            </svg>
+            <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold" style={{ color: accent }}>
+              {completionRate.toFixed(0)}%
+            </span>
+          </div>
         </div>
       </div>
 

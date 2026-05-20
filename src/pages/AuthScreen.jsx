@@ -1,41 +1,23 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    Lock, Mail, Smartphone, ArrowRight, Fingerprint, User, Phone, MapPin,
-    CreditCard, Users, Upload, FileCheck, ShieldCheck, ScrollText, CheckCircle,
-    Camera, RotateCcw, Eye, EyeOff, AlertCircle, CheckCircle2,
+    Lock, Mail, ArrowRight, User, Upload, ShieldCheck, ScrollText, CheckCircle,
+    Eye, EyeOff, AlertCircle, CheckCircle2,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { validateLogin } from '../validation/authRules';
-import { signIn, resetPassword } from '../services/authService';
+import { validateLogin, validatePassword } from '../validation/authRules';
+import { signIn, resetPassword, getLockoutState } from '../services/authService';
 import { uploadRegistrationDoc } from '../services/storageService';
-import { readStore } from '../services/storage';
 import { cn } from '../components/ui/utils';
-
-// Defined outside AuthScreen so the reference is stable across renders.
-// Inline component definitions cause React to unmount/remount on every render.
-function FieldWrapper({ label, icon: Icon, children }) {
-    return (
-        <div className="space-y-1.5">
-            <p className="eyebrow text-muted-foreground ml-1">{label}</p>
-            <div className="relative group">
-                {Icon && (
-                    <Icon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/30 group-focus-within:text-primary transition-colors pointer-events-none"/>
-                )}
-                {children}
-            </div>
-        </div>
-    );
-}
-
-const inputCls = (withIcon = true) =>
-    cn(
-        'h-14 bg-input-background border border-border focus:border-primary/50 focus:ring-2 focus:ring-primary/10 transition-all rounded-2xl text-foreground placeholder:text-foreground/25 outline-none w-full',
-        withIcon ? 'pl-12' : 'pl-4',
-    );
+import { FieldWrapper, inputCls } from './auth/authHelpers';
+import { StepProfile } from './auth/StepProfile';
+import { StepDocuments } from './auth/StepDocuments';
+import { StepVerification } from './auth/StepVerification';
+import { StepTerms } from './auth/StepTerms';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const GHANA_PHONE_RE = /^(\+233|0)[2-5][0-9]{8}$/;
+const GHANA_CARD_RE = /^GHA-[0-9]{9}-[0-9]$/i;
 
 const STEPS = [
     { title: 'Profile',     icon: User },
@@ -44,7 +26,7 @@ const STEPS = [
     { title: 'Terms',       icon: ScrollText },
 ];
 
-export default function AuthScreen({ onLogin, onBio, onRegister, registrationGroups = [] }) {
+export default function AuthScreen({ onLogin, onRegister, registrationGroups = [] }) {
     const [mode, setMode] = useState('login'); // 'login' | 'register' | 'success'
 
     // ── Login fields
@@ -53,8 +35,11 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
     const [showPw, setShowPw]       = useState(false);
     const [loginError, setLoginError] = useState(null);
     const [loading, setLoading]     = useState(false);
+    const [lockoutMs, setLockoutMs] = useState(0);   // ms remaining in lockout
+    const [attemptsLeft, setAttemptsLeft] = useState(null); // null = no warning yet
     const [forgotLoading, setForgotLoading] = useState(false);
     const [forgotSent, setForgotSent]       = useState(false);
+    const [forgotHint, setForgotHint]       = useState(false);
 
     // ── Registration fields
     const [step, setStep] = useState(0);
@@ -63,7 +48,9 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
     const [regPhone, setRegPhone]         = useState('');
     const [regEmail, setRegEmail]         = useState('');
     const [regPassword, setRegPassword]   = useState('');
+    const [regPasswordConfirm, setRegPasswordConfirm] = useState('');
     const [showRegPw, setShowRegPw]       = useState(false);
+    const [showRegPwConfirm, setShowRegPwConfirm] = useState(false);
     const [regAddress, setRegAddress]     = useState('');
     const [preferredGroup, setPreferredGroup] = useState('');
     const [ghanaCard, setGhanaCard]       = useState('');
@@ -84,10 +71,6 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
     const videoRef  = useRef(null);
     const streamRef = useRef(null);
 
-    const biometricAllowed = (() => {
-        const stored = readStore('settings', {});
-        return stored?.biometricLogin !== false;
-    })();
 
     const visibleGroups = registrationGroups.filter(g => g.listedForRegistration !== false);
 
@@ -97,6 +80,19 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
             setPreferredGroup(String(visibleGroups[0].id));
         }
     }, [preferredGroup, visibleGroups]);
+
+    // Detect invite link: ?invite=groupId → switch to register and pre-select group
+    useEffect(() => {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const inviteId = params.get('invite');
+            if (inviteId && mode === 'login') {
+                setMode('register');
+                setStep(0);
+                setPreferredGroup(String(inviteId));
+            }
+        } catch {}
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── Camera helpers
     const stopCamera = () => {
@@ -127,6 +123,19 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
     };
     useEffect(() => stopCamera, []);
 
+    // Tick the lockout countdown every second.
+    useEffect(() => {
+        if (lockoutMs <= 0) return;
+        const id = setInterval(() => {
+            setLockoutMs(prev => {
+                const next = prev - 1000;
+                if (next <= 0) { clearInterval(id); return 0; }
+                return next;
+            });
+        }, 1000);
+        return () => clearInterval(id);
+    }, [lockoutMs > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+
     // ── Document upload
     const readUpload = async (key, file) => {
         if (!file) return;
@@ -148,7 +157,9 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
             const cleanPhone = regPhone.replace(/[\s\-()]/g, '');
             if (!GHANA_PHONE_RE.test(cleanPhone)) return 'Enter a valid Ghana mobile number (e.g. 0244123456).';
             if (!EMAIL_RE.test(regEmail.trim())) return 'Enter a valid email address.';
-            if (regPassword.length < 8) return 'Password must be at least 8 characters.';
+            const pwCheck = validatePassword(regPassword);
+            if (!pwCheck.ok) return pwCheck.message;
+            if (regPassword !== regPasswordConfirm) return 'Passwords do not match.';
             if (!regAddress.trim()) return 'Residential or business address is required.';
             if (!preferredGroup) return 'Please select a preferred group.';
             return null;
@@ -160,12 +171,14 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
             return null;
         }
         if (s === 2) {
-            if (!ghanaCard.trim())      return 'Ghana Card number is required.';
-            if (!bankMomo.trim())       return 'MoMo / Bank account information is required.';
-            if (!occupation.trim())     return 'Occupation is required.';
-            if (!emergencyName.trim())  return 'Emergency contact name is required.';
-            if (!emergencyPhone.trim()) return 'Emergency contact phone is required.';
-            if (!liveSelfie)            return 'Please capture a live selfie to verify your identity.';
+            if (!ghanaCard.trim()) return 'Ghana Card number is required.';
+            if (!GHANA_CARD_RE.test(ghanaCard.trim())) return 'Enter a valid Ghana Card number (e.g. GHA-123456789-0).';
+            if (!bankMomo.trim()) return 'MoMo / Bank account information is required.';
+            if (!occupation.trim()) return 'Occupation is required.';
+            if (!emergencyName.trim()) return 'Emergency contact name is required.';
+            const cleanEmergencyPhone = emergencyPhone.replace(/[\s\-()]/g, '');
+            if (!GHANA_PHONE_RE.test(cleanEmergencyPhone)) return 'Enter a valid Ghana mobile number for the emergency contact.';
+            if (!liveSelfie) return 'Please capture a live selfie to verify your identity.';
             return null;
         }
         if (s === 3) {
@@ -183,9 +196,10 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
     const handleForgotPassword = async () => {
         const trimmed = email.trim();
         if (!trimmed) {
-            setLoginError('Enter your email address above, then click Forgot Password.');
+            setForgotHint(true);
             return;
         }
+        setForgotHint(false);
         setForgotLoading(true);
         setLoginError(null);
         const result = await resetPassword(trimmed);
@@ -202,12 +216,27 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
         e.preventDefault();
         setLoginError(null);
         setForgotSent(false);
+
+        // Check lockout before even hitting the network.
+        const ls = getLockoutState(email.trim().toLowerCase());
+        if (ls.locked) {
+            setLockoutMs(ls.remainingMs);
+            return;
+        }
+
         const v = validateLogin(email, password);
         if (!v.ok) { setLoginError(v.message); return; }
         setLoading(true);
         try {
             const result = await signIn(email, password);
-            if (!result.ok) { setLoginError(result.message); return; }
+            if (!result.ok) {
+                setLoginError(result.message);
+                if (result.locked) setLockoutMs(getLockoutState(email.trim().toLowerCase()).remainingMs);
+                if (result.attemptsLeft != null) setAttemptsLeft(result.attemptsLeft);
+                return;
+            }
+            setAttemptsLeft(null);
+            setLockoutMs(0);
             onLogin(result.user);
         } catch (err) {
             console.error('[handleLogin] unexpected error', err);
@@ -279,8 +308,11 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
         setStepError(null);
         setLoginError(null);
         setForgotSent(false);
+        setRegPassword('');
+        setRegPasswordConfirm('');
     };
     const switchToLogin = () => {
+        stopCamera();
         setMode('login');
         setLoginError(null);
     };
@@ -319,25 +351,40 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
     // Main card
     // ─────────────────────────────────────────────────────────────────────────
     return (
-        <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-5">
+        <div className={cn(
+            "bg-background text-foreground flex flex-col items-center",
+            // html/body have overflow:hidden globally; the auth screen must own its scroll
+            mode === 'register'
+                ? "h-screen overflow-y-auto px-5 pt-8 pb-12"
+                : "h-screen overflow-hidden justify-center p-5",
+        )}>
+            {/* Background atmosphere — stronger in light mode, softer in dark */}
+            <div className="fixed inset-0 pointer-events-none overflow-hidden select-none" aria-hidden>
+                <div className="absolute -top-40 -right-20 w-[520px] h-[520px] rounded-full bg-primary/[0.16] dark:bg-primary/[0.08] blur-[100px]"/>
+                <div className="absolute -bottom-24 -left-16 w-[400px] h-[400px] rounded-full bg-primary/[0.12] dark:bg-primary/[0.06] blur-[90px]"/>
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] rounded-full bg-primary/[0.06] dark:hidden blur-[130px]"/>
+            </div>
+
             <div className="w-full max-w-md z-10">
 
                 {/* Logo + heading */}
                 <div className="text-center mb-7 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                    <div className="relative inline-flex items-center justify-center w-18 h-18 rounded-[1.75rem] bg-card mb-5 border border-border p-3 w-[4.5rem] h-[4.5rem]">
-                        <img src="/logo512.png" alt="Excellent Susu" className="w-full h-full object-contain"/>
+                    <div className="relative inline-flex items-center justify-center w-[5rem] h-[5rem] rounded-[1.5rem] bg-white mb-5 border-2 border-white/20 shadow-[0_4px_24px_rgba(7,61,127,0.18),0_1px_6px_rgba(7,61,127,0.10)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.50)] p-2.5 overflow-hidden">
+                        <img src="/logo512.png" alt="Excellent Susu" className="w-full h-full object-contain rounded-xl"/>
                         <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-success border-2 border-background" aria-hidden/>
                     </div>
-                    <h1 className="text-3xl font-bold tracking-tight text-foreground">
+                    <h1 className="text-[1.75rem] font-bold tracking-tight text-foreground leading-tight">
                         {mode === 'login' ? 'Welcome Back' : 'Request Access'}
                     </h1>
-                    <p className="text-foreground/40 mt-1.5 text-sm font-medium">
+                    <p className="text-foreground/50 dark:text-foreground/40 mt-1.5 text-sm font-medium">
                         {mode === 'login' ? 'Secure access to your financial hub' : 'Submit your member registration'}
                     </p>
                 </div>
 
                 {/* Card */}
-                <div className="bg-card border border-border backdrop-blur-2xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] rounded-[2rem] p-6 sm:p-8 animate-in zoom-in-95 duration-500">
+                <div className="relative bg-card border border-border/80 rounded-[1.75rem] p-6 sm:p-7 shadow-[0_8px_40px_rgba(7,61,127,0.14),0_2px_8px_rgba(7,61,127,0.08)] dark:shadow-[0_24px_64px_-12px_rgba(0,0,0,0.6)] animate-in zoom-in-95 duration-500 overflow-hidden">
+                    {/* Top accent line */}
+                    <div className="absolute inset-x-0 top-0 h-[2.5px] bg-gradient-to-r from-primary/30 via-primary/70 to-primary/30 rounded-t-[1.75rem]" aria-hidden/>
 
                     {/* Registration step indicator */}
                     {mode === 'register' && (
@@ -392,7 +439,16 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
                                     placeholder="name@company.com"
                                     className={inputCls()}
                                     value={email}
-                                    onChange={e => { setEmail(e.target.value); setLoginError(null); setForgotSent(false); }}
+                                    onChange={e => {
+                                        setEmail(e.target.value);
+                                        setLoginError(null);
+                                        setForgotSent(false);
+                                        setForgotHint(false);
+                                        setAttemptsLeft(null);
+                                        // Restore lockout if this email is already locked.
+                                        const ls = getLockoutState(e.target.value.trim().toLowerCase());
+                                        setLockoutMs(ls.locked ? ls.remainingMs : 0);
+                                    }}
                                     autoComplete="email"
                                     required
                                 />
@@ -418,7 +474,7 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
                                 </button>
                             </FieldWrapper>
 
-                            <div className="flex justify-end -mt-2">
+                            <div className="flex flex-col items-end gap-1.5 -mt-2">
                                 <button
                                     type="button"
                                     onClick={handleForgotPassword}
@@ -427,6 +483,11 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
                                 >
                                     {forgotLoading ? 'Sending…' : 'Forgot password?'}
                                 </button>
+                                {forgotHint && (
+                                    <p className="text-xs text-amber-500/80 font-medium text-right animate-in slide-in-from-top-1 duration-200">
+                                        Enter your email above, then tap Forgot password.
+                                    </p>
+                                )}
                             </div>
 
                             {forgotSent && (
@@ -436,7 +497,31 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
                                 </div>
                             )}
 
-                            {loginError && (
+                            {/* Lockout countdown */}
+                            {lockoutMs > 0 && (
+                                <div className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-destructive/10 border border-destructive/20 text-destructive text-xs font-medium">
+                                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5"/>
+                                    <span>
+                                        Account locked. Try again in{' '}
+                                        <span className="font-bold tabular-nums">
+                                            {String(Math.floor(lockoutMs / 60000)).padStart(2, '0')}:{String(Math.floor((lockoutMs % 60000) / 1000)).padStart(2, '0')}
+                                        </span>
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* Attempts-remaining warning (2 or 1 left) */}
+                            {lockoutMs <= 0 && attemptsLeft != null && attemptsLeft <= 2 && attemptsLeft > 0 && (
+                                <div className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-600 dark:text-amber-400 text-xs font-medium">
+                                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5"/>
+                                    {attemptsLeft === 1
+                                        ? 'Last attempt before a 15-minute lockout.'
+                                        : `${attemptsLeft} attempts remaining before a 15-minute lockout.`}
+                                </div>
+                            )}
+
+                            {/* General login error */}
+                            {lockoutMs <= 0 && loginError && (
                                 <div className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-destructive/10 border border-destructive/20 text-destructive text-xs font-medium">
                                     <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5"/>
                                     {loginError}
@@ -445,29 +530,17 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
 
                             <Button
                                 type="submit"
-                                disabled={loading}
-                                className="w-full h-14 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-2xl transition-all active:scale-[0.98] shadow-lg shadow-primary/20"
+                                disabled={loading || lockoutMs > 0}
+                                className="w-full h-14 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-2xl transition-all active:scale-[0.98] shadow-[0_4px_20px_rgba(100,145,222,0.40)] hover:shadow-[0_6px_24px_rgba(100,145,222,0.50)] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
                             >
                                 {loading
                                     ? <span className="flex items-center gap-2"><span className="w-5 h-5 border-2 border-primary/30 border-t-white rounded-full animate-spin"/><span>Signing in…</span></span>
-                                    : <span className="flex items-center gap-2">Sign In<ArrowRight className="w-5 h-5"/></span>
+                                    : lockoutMs > 0
+                                        ? <span>Locked</span>
+                                        : <span className="flex items-center gap-2">Sign In<ArrowRight className="w-5 h-5"/></span>
                                 }
                             </Button>
 
-                            {biometricAllowed && (
-                                <div className="pt-2 border-t border-border">
-                                    <p className="text-center eyebrow text-foreground/30 mb-3">Or continue with</p>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        className="w-full h-12 border-border bg-input-background hover:bg-accent hover:border-border transition-all rounded-xl group"
-                                        onClick={onBio}
-                                    >
-                                        <Fingerprint className="w-4 h-4 mr-2 text-primary group-hover:scale-110 transition-transform"/>
-                                        <span className="font-bold text-xs">Biometric Login</span>
-                                    </Button>
-                                </div>
-                            )}
                         </form>
                     )}
 
@@ -485,202 +558,49 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
 
                             {/* Step 0 — Profile */}
                             {step === 0 && (
-                                <>
-                                    <FieldWrapper label="Full Name" icon={User}>
-                                        <Input type="text" placeholder="Kwame Asante" className={inputCls()} value={regName} onChange={e => { setRegName(e.target.value); setStepError(null); }} required/>
-                                    </FieldWrapper>
-                                    <FieldWrapper label="Phone Number" icon={Phone}>
-                                        <Input type="tel" placeholder="0244 001 122" className={inputCls()} value={regPhone} onChange={e => { setRegPhone(e.target.value); setStepError(null); }} required/>
-                                    </FieldWrapper>
-                                    <FieldWrapper label="Email Address" icon={Mail}>
-                                        <Input type="email" placeholder="name@company.com" className={inputCls()} value={regEmail} onChange={e => { setRegEmail(e.target.value); setStepError(null); }} required/>
-                                    </FieldWrapper>
-                                    <FieldWrapper label="Password" icon={Lock}>
-                                        <Input
-                                            type={showRegPw ? 'text' : 'password'}
-                                            placeholder="At least 8 characters"
-                                            className={cn(inputCls(), 'pr-12')}
-                                            value={regPassword}
-                                            onChange={e => { setRegPassword(e.target.value); setStepError(null); }}
-                                            autoComplete="new-password"
-                                            required
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowRegPw(s => !s)}
-                                            aria-label={showRegPw ? 'Hide password' : 'Show password'}
-                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-foreground/35 hover:text-foreground/70 transition-colors"
-                                        >
-                                            {showRegPw ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
-                                        </button>
-                                    </FieldWrapper>
-                                    <FieldWrapper label="Residential / Business Address" icon={MapPin}>
-                                        <Input type="text" placeholder="Madina Market, Accra" className={inputCls()} value={regAddress} onChange={e => { setRegAddress(e.target.value); setStepError(null); }} required/>
-                                    </FieldWrapper>
-                                    <FieldWrapper label="Preferred Group" icon={Users}>
-                                        {visibleGroups.length === 0 ? (
-                                            <div className={cn(inputCls(), 'flex items-center text-muted-foreground text-sm cursor-not-allowed opacity-60')}>
-                                                No groups open for registration yet
-                                            </div>
-                                        ) : (
-                                            <select
-                                                className={cn(inputCls(), 'w-full appearance-none')}
-                                                value={preferredGroup}
-                                                onChange={e => { setPreferredGroup(e.target.value); setStepError(null); }}
-                                                required
-                                            >
-                                                <option value="">Select a group…</option>
-                                                {visibleGroups.map(g => (
-                                                    <option key={g.id} value={g.id} className="bg-card">
-                                                        {g.groupName || g.name}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        )}
-                                    </FieldWrapper>
-                                </>
+                                <StepProfile
+                                    regName={regName} setRegName={setRegName}
+                                    regPhone={regPhone} setRegPhone={setRegPhone}
+                                    regEmail={regEmail} setRegEmail={setRegEmail}
+                                    regPassword={regPassword} setRegPassword={setRegPassword}
+                                    regPasswordConfirm={regPasswordConfirm} setRegPasswordConfirm={setRegPasswordConfirm}
+                                    showRegPw={showRegPw} setShowRegPw={setShowRegPw}
+                                    showRegPwConfirm={showRegPwConfirm} setShowRegPwConfirm={setShowRegPwConfirm}
+                                    regAddress={regAddress} setRegAddress={setRegAddress}
+                                    preferredGroup={preferredGroup} setPreferredGroup={setPreferredGroup}
+                                    visibleGroups={visibleGroups}
+                                    setStepError={setStepError}
+                                />
                             )}
 
                             {/* Step 1 — Documents */}
                             {step === 1 && (
-                                <div className="space-y-3 rounded-2xl border border-border bg-input-background p-5">
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <FileCheck className="h-5 w-5 text-primary flex-shrink-0"/>
-                                        <div>
-                                            <p className="eyebrow text-foreground/50">Document Upload</p>
-                                            <p className="text-xs text-foreground/35 mt-0.5">Upload clear photos of all three documents.</p>
-                                        </div>
-                                    </div>
-                                    {[
-                                        { key: 'passportPic',    label: 'Passport Photo',    value: uploadNames.passportPic },
-                                        { key: 'ghanaCardFront', label: 'Ghana Card — Front', value: uploadNames.ghanaCardFront },
-                                        { key: 'ghanaCardBack',  label: 'Ghana Card — Back',  value: uploadNames.ghanaCardBack },
-                                    ].map(doc => (
-                                        <label
-                                            key={doc.key}
-                                            className={cn(
-                                                'flex cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3.5 text-sm transition-colors',
-                                                doc.value
-                                                    ? 'border-success/30 bg-success/8 text-success'
-                                                    : 'border-border bg-card text-foreground/60 hover:bg-accent',
-                                            )}
-                                        >
-                                            <span className="flex items-center gap-3 min-w-0">
-                                                {doc.value
-                                                    ? <CheckCircle className="h-4 w-4 flex-shrink-0 text-success"/>
-                                                    : <Upload className="h-4 w-4 flex-shrink-0 text-primary"/>
-                                                }
-                                                <span className="truncate font-medium">{doc.value || doc.label}</span>
-                                            </span>
-                                            <span className="eyebrow text-foreground/35 flex-shrink-0">
-                                                {doc.value ? 'Done' : 'Upload'}
-                                            </span>
-                                            <input
-                                                type="file"
-                                                accept="image/*"
-                                                className="sr-only"
-                                                onChange={e => { readUpload(doc.key, e.target.files?.[0]); setStepError(null); }}
-                                            />
-                                        </label>
-                                    ))}
-                                </div>
+                                <StepDocuments uploadNames={uploadNames} readUpload={readUpload} setStepError={setStepError}/>
                             )}
 
                             {/* Step 2 — Verification */}
                             {step === 2 && (
-                                <>
-                                    <FieldWrapper label="Ghana Card Number" icon={CreditCard}>
-                                        <Input type="text" placeholder="GHA-123456789-0" className={inputCls()} value={ghanaCard} onChange={e => { setGhanaCard(e.target.value); setStepError(null); }} required/>
-                                    </FieldWrapper>
-                                    <FieldWrapper label="MoMo / Bank Account" icon={Smartphone}>
-                                        <Input type="text" placeholder="0244 001 122 — MTN MoMo" className={inputCls()} value={bankMomo} onChange={e => { setBankMomo(e.target.value); setStepError(null); }} required/>
-                                    </FieldWrapper>
-                                    <FieldWrapper label="Occupation / Business" icon={User}>
-                                        <Input type="text" placeholder="Market trader" className={inputCls()} value={occupation} onChange={e => { setOccupation(e.target.value); setStepError(null); }} required/>
-                                    </FieldWrapper>
-                                    <div className="grid gap-4 sm:grid-cols-2">
-                                        <FieldWrapper label="Emergency Contact" icon={User}>
-                                            <Input type="text" placeholder="Abena Mensah" className={inputCls()} value={emergencyName} onChange={e => { setEmergencyName(e.target.value); setStepError(null); }} required/>
-                                        </FieldWrapper>
-                                        <FieldWrapper label="Contact Phone" icon={Phone}>
-                                            <Input type="tel" placeholder="0200 000 000" className={inputCls()} value={emergencyPhone} onChange={e => { setEmergencyPhone(e.target.value); setStepError(null); }} required/>
-                                        </FieldWrapper>
-                                    </div>
-
-                                    {/* Live selfie */}
-                                    <div className="rounded-2xl border border-border bg-input-background p-5 space-y-4">
-                                        <div className="flex items-center gap-3">
-                                            <Camera className="h-5 w-5 text-primary flex-shrink-0"/>
-                                            <div>
-                                                <p className="eyebrow text-foreground/50">Live Selfie</p>
-                                                <p className="text-xs text-foreground/35 mt-0.5">Capture a live selfie to verify your identity.</p>
-                                            </div>
-                                        </div>
-
-                                        {liveSelfie ? (
-                                            <div className="space-y-3">
-                                                <img src={liveSelfie} alt="Live selfie" className="h-48 w-full rounded-2xl border border-success/20 object-cover"/>
-                                                <Button type="button" variant="outline" className="w-full rounded-2xl border-border bg-card text-foreground hover:bg-accent" onClick={() => { setLiveSelfie(null); startCamera(); }}>
-                                                    <RotateCcw className="h-4 w-4 mr-2"/>Retake
-                                                </Button>
-                                            </div>
-                                        ) : (
-                                            <div className="space-y-3">
-                                                <div className="relative h-44 overflow-hidden rounded-2xl border border-border bg-black/30">
-                                                    {cameraActive
-                                                        ? <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover"/>
-                                                        : <div className="flex h-full flex-col items-center justify-center gap-2 text-foreground/25">
-                                                              <Camera className="h-10 w-10"/>
-                                                              <span className="text-xs">Camera preview</span>
-                                                          </div>
-                                                    }
-                                                </div>
-                                                {cameraError && (
-                                                    <p className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">{cameraError}</p>
-                                                )}
-                                                <div className="grid gap-3 sm:grid-cols-2">
-                                                    <Button type="button" variant="outline" className="rounded-2xl border-border bg-card text-foreground hover:bg-accent" onClick={startCamera}>
-                                                        <Camera className="h-4 w-4 mr-2"/>Start Camera
-                                                    </Button>
-                                                    <Button type="button" className="rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90" disabled={!cameraActive} onClick={() => { captureSelfie(); setStepError(null); }}>
-                                                        <CheckCircle className="h-4 w-4 mr-2"/>Capture
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </>
+                                <StepVerification
+                                    ghanaCard={ghanaCard} setGhanaCard={setGhanaCard}
+                                    bankMomo={bankMomo} setBankMomo={setBankMomo}
+                                    occupation={occupation} setOccupation={setOccupation}
+                                    emergencyName={emergencyName} setEmergencyName={setEmergencyName}
+                                    emergencyPhone={emergencyPhone} setEmergencyPhone={setEmergencyPhone}
+                                    liveSelfie={liveSelfie} setLiveSelfie={setLiveSelfie}
+                                    cameraActive={cameraActive} cameraError={cameraError}
+                                    videoRef={videoRef}
+                                    startCamera={startCamera} stopCamera={stopCamera} captureSelfie={captureSelfie}
+                                    setStepError={setStepError}
+                                />
                             )}
 
                             {/* Step 3 — Terms */}
                             {step === 3 && (
-                                <div className="space-y-4">
-                                    <div className="rounded-2xl border border-border bg-input-background p-5">
-                                        <div className="flex items-center gap-3 mb-4">
-                                            <ScrollText className="h-5 w-5 text-primary flex-shrink-0"/>
-                                            <p className="eyebrow text-foreground/50">Terms & Conditions</p>
-                                        </div>
-                                        <div className="space-y-2.5 text-sm leading-6 text-foreground/50">
-                                            <p>I agree to make contributions on schedule according to the selected group rules.</p>
-                                            <p>I understand that missed contributions may delay payouts and trigger reminder notices or account review.</p>
-                                            <p>I confirm that my identity details and uploaded documents are accurate and may be reviewed by administrators.</p>
-                                        </div>
-                                    </div>
-                                    <label className={cn(
-                                        'flex items-start gap-3 rounded-2xl border p-4 text-sm cursor-pointer transition-colors',
-                                        acceptedTerms ? 'border-primary/30 bg-primary/8 text-foreground' : 'border-border bg-input-background text-foreground/60 hover:bg-accent'
-                                    )}>
-                                        <input type="checkbox" className="mt-0.5 h-4 w-4 accent-primary flex-shrink-0" checked={acceptedTerms} onChange={e => { setAcceptedTerms(e.target.checked); setStepError(null); }}/>
-                                        <span>I accept the susu group terms, payout rules, and member responsibilities.</span>
-                                    </label>
-                                    <label className={cn(
-                                        'flex items-start gap-3 rounded-2xl border p-4 text-sm cursor-pointer transition-colors',
-                                        acceptedDataPolicy ? 'border-primary/30 bg-primary/8 text-foreground' : 'border-border bg-input-background text-foreground/60 hover:bg-accent'
-                                    )}>
-                                        <input type="checkbox" className="mt-0.5 h-4 w-4 accent-primary flex-shrink-0" checked={acceptedDataPolicy} onChange={e => { setAcceptedDataPolicy(e.target.checked); setStepError(null); }}/>
-                                        <span>I consent to storage and review of my registration data and documents for verification purposes.</span>
-                                    </label>
-                                </div>
+                                <StepTerms
+                                    acceptedTerms={acceptedTerms} setAcceptedTerms={setAcceptedTerms}
+                                    acceptedDataPolicy={acceptedDataPolicy} setAcceptedDataPolicy={setAcceptedDataPolicy}
+                                    setStepError={setStepError}
+                                />
                             )}
 
                             {/* Navigation buttons */}
@@ -707,7 +627,7 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
                                     <Button
                                         type="submit"
                                         disabled={loading}
-                                        className="h-14 flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-2xl active:scale-[0.98] shadow-lg shadow-primary/20 disabled:opacity-60"
+                                        className="h-14 flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-2xl active:scale-[0.98] shadow-lg shadow-primary/20 disabled:opacity-60 disabled:cursor-not-allowed"
                                     >
                                         {loading
                                             ? <span className="flex items-center gap-2"><span className="w-5 h-5 border-2 border-primary/30 border-t-white rounded-full animate-spin"/><span>Submitting…</span></span>
@@ -722,12 +642,12 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
 
                 {/* Toggle login/register */}
                 <div className="text-center mt-5 animate-in fade-in slide-in-from-bottom-2 duration-1000">
-                    <p className="text-sm text-foreground/45 font-medium">
+                    <p className="text-sm text-foreground/50 font-medium">
                         {mode === 'register' ? 'Already approved? ' : "Don't have an account? "}
                         <button
                             type="button"
                             onClick={mode === 'register' ? switchToLogin : switchToRegister}
-                            className="text-primary font-bold hover:text-primary/80 transition-colors"
+                            className="text-primary font-bold hover:text-primary/80 transition-colors underline-offset-2 hover:underline"
                         >
                             {mode === 'register' ? 'Sign In' : 'Request access'}
                         </button>
@@ -735,7 +655,7 @@ export default function AuthScreen({ onLogin, onBio, onRegister, registrationGro
                 </div>
             </div>
 
-            <p className="mt-8 pb-6 eyebrow text-foreground/20 z-10">
+            <p className={cn("eyebrow text-foreground/30 z-10", mode === 'register' ? "mt-6 pb-2" : "mt-8 pb-6")}>
                 Excellent Susu · Powered by Plush Enterprise
             </p>
         </div>

@@ -9,6 +9,12 @@ export function validatePassword(password) {
     if (!password || password.length < 8) {
         return { ok: false, message: 'Password must be at least 8 characters.' };
     }
+    if (!/[A-Z]/.test(password)) {
+        return { ok: false, message: 'Password must contain at least one uppercase letter.' };
+    }
+    if (!/[0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)) {
+        return { ok: false, message: 'Password must contain at least one number or special character.' };
+    }
     return { ok: true };
 }
 export function validateLogin(email, password) {

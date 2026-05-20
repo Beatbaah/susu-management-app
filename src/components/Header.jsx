@@ -9,7 +9,8 @@ export function Header({ user, title, onOpenSidebar, notificationCount = 0, onNo
         .join('')
         .slice(0, 2)
         .toUpperCase();
-    return (<header className="bg-card border-b border-border px-4 md:px-7 sticky top-0 z-30 transition-colors duration-200">
+    const [mobileSearchOpen, setMobileSearchOpen] = React.useState(false);
+    return (<header className="bg-card border-b border-border shadow-[var(--shadow-xs)] px-4 md:px-7 sticky top-0 z-30 transition-colors duration-200">
       <div className="flex items-center justify-between gap-4 max-w-[1600px] mx-auto h-[60px]">
 
         {/* ── Left: Menu (mobile) + Title ── */}
@@ -40,6 +41,11 @@ export function Header({ user, title, onOpenSidebar, notificationCount = 0, onNo
 
         {/* ── Right: Actions + Avatar ── */}
         <div className="flex items-center gap-1">
+
+          {/* Mobile search toggle */}
+          <button type="button" onClick={() => setMobileSearchOpen(s => !s)} aria-label="Search" className="lg:hidden w-9 h-9 flex items-center justify-center rounded-full text-foreground/45 hover:text-foreground hover:bg-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+            <Search className="w-[17px] h-[17px]" strokeWidth={1.75}/>
+          </button>
 
           {/* Notifications */}
           <button type="button" onClick={onNotificationsClick} aria-label={`Notifications${notificationCount > 0 ? ` — ${notificationCount} unread` : ''}`} className={cn('relative w-9 h-9 flex items-center justify-center rounded-full', 'text-foreground/45 hover:text-foreground hover:bg-accent', 'transition-colors duration-150', 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40')}>
@@ -80,5 +86,20 @@ export function Header({ user, title, onOpenSidebar, notificationCount = 0, onNo
         </div>
 
       </div>
+      {mobileSearchOpen && (
+        <div className="lg:hidden pb-2.5 px-1 animate-in slide-in-from-top-1 duration-200">
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50 pointer-events-none" strokeWidth={1.75}/>
+            <input
+              autoFocus
+              type="search"
+              placeholder={searchPlaceholder}
+              value={searchValue}
+              onChange={(e) => onSearch?.(e.target.value)}
+              className="w-full h-9 rounded-full pl-9 pr-4 bg-accent border border-border text-sm text-foreground placeholder:text-muted-foreground/50 focus:bg-card focus:border-primary/30 focus:ring-2 focus:ring-primary/10 outline-none transition-all duration-200"
+            />
+          </div>
+        </div>
+      )}
     </header>);
 }

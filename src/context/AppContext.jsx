@@ -10,15 +10,17 @@ import { listPayouts, completePayout as svcCompletePayout, assignPayoutRecipient
 import { postMessage as svcPostMessage, postAnnouncement as svcPostAnnouncement, addReaction as svcAddReaction } from '../services/chatService';
 import { listReminders, sendReminder as svcSendReminder, markRead as svcMarkRead, markAllRead as svcMarkAllRead, deleteReminder as svcDeleteReminder, clearReminders as svcClearReminders, replaceReminders as svcReplaceReminders, } from '../services/notificationService';
 import { listLogs, appendLog, clearLogs as svcClearLogs } from '../services/auditService';
-import { getCurrentUser, setCurrentUser } from '../services/authService';
-import { isFirestoreReady, subscribeCollection } from '../services/firestoreSync';
+import { getCurrentUser, setCurrentUser, signOut as authSignOut } from '../services/authService';
+import { isFirestoreReady, subscribeCollection, upsertDoc, setWriteErrorHandler } from '../services/firestoreSync';
+import { where, getDoc, doc } from 'firebase/firestore';
+import { db } from '../utils/firebase';
+import { getPermissionState, requestPushPermission, onForegroundMessage, showBrowserNotification } from '../services/pushNotificationService';
+import { toast } from '../utils/toast';
 const DEFAULT_SETTINGS = {
     notifPaymentReminders: true,
     notifPayoutAlerts: true,
     notifGroupChat: false,
     notifDefaulterAlerts: true,
-    biometricLogin: true,
-    twoFA: false,
     darkMode: false,
     language: 'English',
     currency: 'GHS (GH₵)',
@@ -42,11 +44,17 @@ const loadInitialState = () => {
     try { storedVersion = localStorage.getItem(LS_VERSION_KEY); } catch {}
     if (storedVersion !== DEMO_DATA_VERSION) {
         wipeLocalStorage();
+        const freshSettings = { ...DEFAULT_SETTINGS };
+        // Preserve dark mode preference even across data wipes — it lives under a separate key.
+        try {
+            const savedDark = localStorage.getItem('excellent_susu_pref_darkMode');
+            if (savedDark !== null) freshSettings.darkMode = savedDark === 'true';
+        } catch {}
         return {
             authUser: null,
             users: [], payments: [], groups: [], reminders: [], schedule: [],
             auditLogs: [],
-            settings: { ...DEFAULT_SETTINGS },
+            settings: freshSettings,
         };
     }
     const authUser = getCurrentUser();
@@ -66,6 +74,14 @@ const loadInitialState = () => {
 };
 export const AppProvider = ({ children }) => {
     const [initial] = useState(loadInitialState);
+    // Register Firestore write-error handler once so failed syncs surface as toasts.
+    useState(() => {
+        if (isFirestoreReady()) {
+            setWriteErrorHandler(() => {
+                toast.error('Sync failed — change saved locally but may not reach the server. Check your connection.');
+            });
+        }
+    });
     const [authUser, setAuthUserState] = useState(() => initial.authUser);
     const [users, setUsers] = useState(() => initial.users);
     const [payments, setPayments] = useState(() => initial.payments);
@@ -79,26 +95,38 @@ export const AppProvider = ({ children }) => {
     // in demo mode; in Firestore mode, true once the first snapshot lands or
     // after a 1.5 s safety timeout (so we never block forever on a slow network).
     const [appReady, setAppReady] = useState(() => !isFirestoreReady());
+    const [connectionTimedOut, setConnectionTimedOut] = useState(false);
     const usersRef = useRef(users);
     const paymentsRef = useRef(payments);
+    const groupsRef = useRef(groups);
+    const lastReminderSentRef = useRef(0);
+    const suspensionSweepUserIdRef = useRef(null);
     // Mirror in-memory state to the persistence layer so services and React
     // stay in sync. Each service is the writer; these effects keep storage and
     // React state aligned when callers do bulk replaces.
     useEffect(() => { setCurrentUser(authUser); }, [authUser]);
-    useEffect(() => { svcReplaceUsers(users); }, [users]);
-    useEffect(() => { svcReplacePayments(payments); }, [payments]);
-    useEffect(() => { svcReplaceGroups(groups); }, [groups]);
-    useEffect(() => { svcReplaceReminders(reminders); }, [reminders]);
-    useEffect(() => { svcReplacePayouts(schedule); }, [schedule]);
+    // In Firestore mode, real-time subscriptions keep state fresh and individual
+    // upsertDoc/removeDoc calls handle writes. Calling replaceCollection here
+    // creates a write loop: subscription → setUsers → replaceCollection → subscription.
+    useEffect(() => { if (!isFirestoreReady()) svcReplaceUsers(users); }, [users]);
+    useEffect(() => { if (!isFirestoreReady()) svcReplacePayments(payments); }, [payments]);
+    useEffect(() => { if (!isFirestoreReady()) svcReplaceGroups(groups); }, [groups]);
+    useEffect(() => { if (!isFirestoreReady()) svcReplaceReminders(reminders); }, [reminders]);
+    useEffect(() => { if (!isFirestoreReady()) svcReplacePayouts(schedule); }, [schedule]);
     useEffect(() => { writeStore('settings', settings); }, [settings]);
     // Apply theme + currency side-effects from settings.
     useEffect(() => {
         if (typeof document === 'undefined')
             return;
-        document.documentElement.classList.toggle('dark', settings.darkMode);
+        const isDark = settings.darkMode;
+        document.documentElement.classList.toggle('dark', isDark);
+        document.documentElement.style.background = isDark ? '#041C3F' : '';
+        // Keep the theme-color meta in sync so the browser chrome matches.
+        const meta = document.getElementById('theme-color-meta');
+        if (meta) meta.setAttribute('content', isDark ? '#041C3F' : '#E8EDF8');
         // Persist independently of Firestore so dark mode survives page reloads
         // even when writeStore is a no-op in Firestore mode.
-        try { localStorage.setItem('excellent_susu_pref_darkMode', String(settings.darkMode)); } catch {}
+        try { localStorage.setItem('excellent_susu_pref_darkMode', String(isDark)); } catch {}
     }, [settings.darkMode]);
     useEffect(() => {
         // Settings store the display string like "GHS (GH₵)". Extract the symbol
@@ -123,51 +151,157 @@ export const AppProvider = ({ children }) => {
         }
         catch { }
     }, []);
-    // On mount, transition any pending payments whose dueDate has passed to overdue.
+    // Transition pending payments whose dueDate has passed to overdue.
+    // Runs on mount and then every hour so long sessions don't show stale statuses.
     useEffect(() => {
-        const { changed, payments: updated } = svcMarkOverduePayments();
-        if (changed) setPayments(updated);
+        const runCheck = () => {
+            if (!isFirestoreReady()) {
+                const { changed, payments: updated } = svcMarkOverduePayments();
+                if (changed) setPayments(updated);
+            } else {
+                const today = new Date().toISOString().split('T')[0];
+                setPayments(prev => {
+                    let changed = false;
+                    const next = prev.map(p => {
+                        if (p.status === 'pending' && p.dueDate && p.dueDate < today) {
+                            changed = true;
+                            const u = { ...p, status: 'overdue', updatedAt: new Date().toISOString() };
+                            void upsertDoc('payments', u);
+                            return u;
+                        }
+                        return p;
+                    });
+                    return changed ? next : prev;
+                });
+            }
+        };
+        runCheck();
+        const intervalId = window.setInterval(runCheck, 60 * 60 * 1000);
+        return () => window.clearInterval(intervalId);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
     useEffect(() => { usersRef.current = users; }, [users]);
     useEffect(() => { paymentsRef.current = payments; }, [payments]);
-    // Phase 3 — when Firebase is configured, subscribe to every collection so
-    // remote changes (made on another device or by Cloud Functions) propagate
-    // into the React cache. Writes still go through services, which already
-    // mirror to Firestore. The local seed is overwritten by the first Firestore
-    // snapshot, including empty collections.
+    useEffect(() => { groupsRef.current = groups; }, [groups]);
+    // Register FCM token when user logs in and has already granted permission.
+    // Silently re-registers in case the token rotated since last session.
     useEffect(() => {
-        if (!isFirestoreReady())
+        if (!authUser?.id || !isFirestoreReady()) return;
+        if (getPermissionState() === 'granted') {
+            requestPushPermission(authUser.id).catch(() => {});
+        }
+    }, [authUser?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Show a browser notification when an FCM push arrives while the app is open.
+    useEffect(() => {
+        let unsub = () => {};
+        onForegroundMessage(payload => {
+            const title = payload.notification?.title || payload.data?.title || 'Excellent Susu';
+            const body  = payload.notification?.body  || payload.data?.body  || '';
+            showBrowserNotification(title, body);
+        }).then(fn => { unsub = fn; });
+        return () => unsub();
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // Reset appReady whenever the signed-in user changes so the loading skeleton
+    // shows correctly on the next login.
+    useEffect(() => {
+        if (isFirestoreReady() && !authUser) setAppReady(false);
+    }, [authUser]); // eslint-disable-line react-hooks/exhaustive-deps
+    // High #8 — re-verify role and status from Firestore on every login/page-load.
+    // The client caches the role in localStorage; this fetch ensures a stale cache
+    // cannot persist an elevated role after an admin demotes the account remotely.
+    useEffect(() => {
+        if (!isFirestoreReady() || !authUser?.id || !db) return;
+        getDoc(doc(db, 'users', authUser.id)).then(snap => {
+            if (!snap.exists()) return;
+            const { role: freshRole, status: freshStatus } = snap.data();
+            if (freshStatus === 'suspended') {
+                // Force logout — account was suspended while user was logged in.
+                authSignOut().catch(() => {});
+                setAuthUserState(null);
+                return;
+            }
+            const validRoles = new Set(['admin', 'manager', 'collector', 'member']);
+            if (freshRole && validRoles.has(freshRole) && freshRole !== authUser.role) {
+                setAuthUserState(prev => prev ? { ...prev, role: freshRole } : prev);
+            }
+        }).catch(() => {}); // network failure is non-fatal
+    }, [authUser?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Phase 3 — when Firebase is configured and the user is logged in, subscribe
+    // to collections with role-scoped queries so Firestore rules are satisfied.
+    // Staff (admin/manager/collector) get unfiltered access; members get queries
+    // filtered to their own data. auditLogs are restricted to admins only.
+    useEffect(() => {
+        if (!isFirestoreReady() || !authUser)
             return;
         // Mark the app ready after the first snapshot from any collection arrives,
-        // or after a 1.5 s timeout — whichever comes first.
+        // or after an 8 s timeout — whichever comes first. The longer timeout
+        // prevents the skeleton clearing before data arrives on slow connections;
+        // if the timeout fires first we also flag a connection warning.
         let readyHit = false;
         const markReady = () => {
             if (readyHit)
                 return;
             readyHit = true;
+            setConnectionTimedOut(false);
             setAppReady(true);
         };
-        const timeoutId = window.setTimeout(markReady, 1500);
-        // subscribeCollection internally waits for anonymous auth, so we can
-        // attach immediately without an extra await here.
-        const unsubs = [
-            subscribeCollection('users', items => { markReady(); setUsers(items); }),
-            subscribeCollection('groups', items => { markReady(); setGroups(items); }),
-            subscribeCollection('payments', items => { markReady(); setPayments(items); }),
-            subscribeCollection('payouts', items => { markReady(); setSchedule(items); }),
-            subscribeCollection('notifications', items => { markReady(); setReminders(items); }),
-            subscribeCollection('auditLogs', items => {
+        const timeoutId = window.setTimeout(() => {
+            if (!readyHit) setConnectionTimedOut(true);
+            markReady();
+        }, 8000);
+        const role = authUser.role;
+        const uid = authUser.id;
+        const isStaff = ['admin', 'manager', 'collector'].includes(role);
+        const isManagerRole = ['admin', 'manager'].includes(role);
+        const isAdminRole = role === 'admin';
+        const normalizeUsers = items => items.map(u => {
+            const raw = u.fullName || u.Fullname || u.name || '';
+            const fmtName = raw
+                ? (raw.includes(' ') ? raw : raw.split(/[._\-]/).filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' '))
+                : (u.email?.split('@')[0] || '');
+            return { ...u, fullName: fmtName, name: fmtName, phone: u.phone || u.contact || '', status: u.status || 'approved' };
+        });
+        // Normalize schema drift: Firestore docs written with legacy field names
+        // are transparently aliased so the rest of the UI only needs one path.
+        const normalizePayments = items => items.map(p => {
+            const memberId = p.memberId || p.userId || '';
+            return { ...p, memberId, userId: memberId };
+        });
+        const normalizeGroups = items => items.map(g => {
+            const groupName = g.groupName || g.name || '';
+            const contributionAmount = Number(g.contributionAmount ?? g.contribution ?? 0);
+            return { ...g, groupName, name: groupName, contributionAmount, contribution: contributionAmount };
+        });
+        const subs = [];
+        // Users: staff see all members; Firestore denies unfiltered list for members
+        if (isStaff) {
+            subs.push(subscribeCollection('users', items => { markReady(); setUsers(normalizeUsers(items)); }));
+        }
+        // Groups: staff see all; members see only groups they belong to
+        subs.push(subscribeCollection('groups', items => { markReady(); setGroups(normalizeGroups(items)); },
+            isStaff ? [] : [where('members', 'array-contains', uid)]));
+        // Payments: staff see all; members see only their own (field: userId)
+        subs.push(subscribeCollection('payments', items => { markReady(); setPayments(normalizePayments(items)); },
+            isStaff ? [] : [where('userId', '==', uid)]));
+        // Payouts: staff see all; members see only where they're the recipient
+        subs.push(subscribeCollection('payouts', items => { markReady(); setSchedule(items); },
+            isStaff ? [] : [where('recipientId', '==', uid)]));
+        // Notifications: managers see all; collectors/members see only their own
+        subs.push(subscribeCollection('notifications', items => { markReady(); setReminders(items); },
+            isManagerRole ? [] : [where('userId', '==', uid)]));
+        // Audit logs: admin only — others get permission denied on the whole collection
+        if (isAdminRole) {
+            subs.push(subscribeCollection('auditLogs', items => {
                 markReady();
                 setAuditLogs([...items]
                     .sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime())
                     .slice(0, 250));
-            }),
-        ];
+            }));
+        }
         return () => {
             window.clearTimeout(timeoutId);
-            unsubs.forEach(u => u());
+            subs.forEach(u => u());
         };
-    }, []);
+    }, [authUser?.id]); // eslint-disable-line react-hooks/exhaustive-deps
     const setAuthUser = (next) => {
         setAuthUserState((prev) => setCurrentUser(typeof next === 'function' ? next(prev) : next));
     };
@@ -200,22 +334,25 @@ export const AppProvider = ({ children }) => {
         catch { }
     };
     // Auto-suspension sweep: if a member has 3+ overdue payments, suspend them.
-    // Runs when authUser changes and the actor is staff.
+    // Runs once per login session (tracked by suspensionSweepUserIdRef) — not on
+    // every profile update that happens to touch the authUser object.
     useEffect(() => {
-        if (!authUser || !['admin', 'manager'].includes(authUser.role))
+        if (!authUser || !['admin', 'manager'].includes(authUser.role)) {
+            if (!authUser) suspensionSweepUserIdRef.current = null;
             return;
-        // Read directly from the service layer to avoid stale ref data on login.
-        const currentUsers = listUsers();
-        const currentPayments = listPayments();
+        }
+        if (suspensionSweepUserIdRef.current === authUser.id) return;
+        suspensionSweepUserIdRef.current = authUser.id;
+
+        const currentUsers = isFirestoreReady() ? usersRef.current : listUsers();
+        const currentPayments = isFirestoreReady() ? paymentsRef.current : listPayments();
         const newReminders = [];
         const updatedUsers = [...currentUsers];
         const newlySuspendedIds = [];
         currentUsers.forEach(u => {
-            if (u.role !== 'member' || u.status !== 'approved')
-                return;
+            if (u.role !== 'member' || u.status !== 'approved') return;
             const overdue = currentPayments.filter(p => (p.userId || p.memberId) === u.id && p.status === 'overdue');
-            if (overdue.length === 0)
-                return;
+            if (overdue.length === 0) return;
             newReminders.push({
                 id: `auto-${u.id}-${Date.now()}`,
                 title: 'Late Payment Warning',
@@ -235,14 +372,18 @@ export const AppProvider = ({ children }) => {
             }
         });
         if (newReminders.length > 0) {
-            svcReplaceReminders([...newReminders, ...listReminders()]);
+            if (isFirestoreReady()) {
+                newReminders.forEach(r => void upsertDoc('notifications', r));
+            } else {
+                svcReplaceReminders([...newReminders, ...listReminders()]);
+            }
             setReminders(prev => [...newReminders, ...prev]);
         }
         if (JSON.stringify(updatedUsers) !== JSON.stringify(currentUsers))
             setUsers(updatedUsers);
-        // Remove newly suspended members from their groups.
         if (newlySuspendedIds.length > 0) {
-            const groupsNext = listGroups().map(g => {
+            const currentGroups = isFirestoreReady() ? groupsRef.current : listGroups();
+            const groupsNext = currentGroups.map(g => {
                 const members = Array.isArray(g.members) ? g.members : [];
                 const filtered = members.filter(id => !newlySuspendedIds.includes(String(id)));
                 return filtered.length !== members.length ? { ...g, members: filtered } : g;
@@ -250,7 +391,7 @@ export const AppProvider = ({ children }) => {
             svcReplaceGroups(groupsNext);
             setGroups(groupsNext);
         }
-    }, [authUser]);
+    }, [authUser]); // eslint-disable-line react-hooks/exhaustive-deps
     // ----- Action methods (delegate to services) -----
     const recordPayment = (p) => {
         const result = svcRecordPayment(p, authUser?.role);
@@ -300,9 +441,12 @@ export const AppProvider = ({ children }) => {
         if (!result.ok)
             return result;
         setSchedule(prev => prev.map(p => (p.id === payoutId ? result.payout : p)));
-        setGroups(listGroups());
+        // Use returned data directly — never re-read localStorage which is empty in Firestore mode.
+        if (result.group) {
+            setGroups(prev => prev.map(g => g.id === result.group.id ? result.group : g));
+        }
         if (Array.isArray(result.generatedPayments) && result.generatedPayments.length > 0) {
-            setPayments(listPayments());
+            setPayments(prev => [...result.generatedPayments, ...prev]);
         }
         logAudit({ action: 'complete payout', targetType: 'payout', targetId: payoutId, newValue: result.payout });
         return result;
@@ -325,8 +469,18 @@ export const AppProvider = ({ children }) => {
         setAuditLogs(listLogs());
         return { ok: true, user: created };
     };
-    const updateMember = (memberId, patch) => {
-        const current = users.find(u => u.id === memberId);
+    const disputePayment = (paymentId, note) => {
+        const result = updatePayment(paymentId, { disputeRaised: true, disputeNote: note || '', disputedAt: new Date().toISOString() });
+        if (result?.ok) logAudit({ action: 'dispute payment', targetType: 'payment', targetId: paymentId, newValue: { disputeNote: note } });
+        return result;
+    };
+    const resolveDispute = (paymentId) => {
+        const result = updatePayment(paymentId, { disputeRaised: false, disputeNote: '', disputeResolvedAt: new Date().toISOString() });
+        if (result?.ok) logAudit({ action: 'resolve dispute', targetType: 'payment', targetId: paymentId });
+        return result;
+    };
+    const updateMember = (memberId, patch, currentData = null) => {
+        const current = users.find(u => u.id === memberId) || currentData;
         const updated = svcUpdateUser(memberId, patch, current);
         if (!updated)
             return null;
@@ -335,7 +489,7 @@ export const AppProvider = ({ children }) => {
             setAuthUser(updated);
         // Keep group.members in sync when groupId changes.
         if ('groupId' in patch && String(patch.groupId) !== String(current?.groupId)) {
-            const groupsNext = listGroups().map(g => {
+            const groupsNext = groups.map(g => {
                 const members = Array.isArray(g.members) ? g.members : [];
                 if (current?.groupId && String(g.id) === String(current.groupId)) {
                     return { ...g, members: members.filter(id => String(id) !== String(memberId)) };
@@ -358,7 +512,7 @@ export const AppProvider = ({ children }) => {
             return null;
         setUsers(prev => prev.map(u => (String(u.id) === String(userId) ? approved : u)));
         if (approved.groupId) {
-            const groupsNext = listGroups().map(g => {
+            const groupsNext = groups.map(g => {
                 if (String(g.id) !== String(approved.groupId))
                     return g;
                 const members = Array.isArray(g.members) ? g.members : [];
@@ -385,13 +539,12 @@ export const AppProvider = ({ children }) => {
             return null;
         setUsers(prev => prev.map(u => (String(u.id) === String(userId) ? rejected : u)));
         // Remove rejected member from any group they belong to.
-        const currentGroups = listGroups();
-        const groupsNext = currentGroups.map(g => {
+        const groupsNext = groups.map(g => {
             const members = Array.isArray(g.members) ? g.members : [];
             if (!members.map(String).includes(String(userId))) return g;
             return { ...g, members: members.filter(id => String(id) !== String(userId)) };
         });
-        if (JSON.stringify(groupsNext) !== JSON.stringify(currentGroups)) {
+        if (groupsNext.some((g, i) => g !== groups[i])) {
             svcReplaceGroups(groupsNext);
             setGroups(groupsNext);
         }
@@ -399,12 +552,12 @@ export const AppProvider = ({ children }) => {
         return rejected;
     };
     const assignUserToGroup = (userId, groupId) => {
-        if (groupId && !listGroups().find(g => String(g.id) === String(groupId)))
+        if (groupId && !groups.find(g => String(g.id) === String(groupId)))
             return;
         const current = users.find(u => String(u.id) === String(userId));
         svcAssignGroup(userId, groupId, current);
         setUsers(prev => prev.map(u => (String(u.id) === String(userId) ? { ...u, groupId } : u)));
-        const groupsNext = listGroups().map(g => {
+        const groupsNext = groups.map(g => {
             const members = Array.isArray(g.members) ? g.members : [];
             if (String(g.id) !== String(groupId)) {
                 return members.map(String).includes(String(userId))
@@ -436,7 +589,7 @@ export const AppProvider = ({ children }) => {
     };
     const postChatMessage = (groupId, message) => {
         const entry = svcPostMessage(groupId, authUser, message);
-        if (entry)
+        if (entry && !isFirestoreReady())
             setGroups(listGroups());
         return entry;
     };
@@ -447,7 +600,7 @@ export const AppProvider = ({ children }) => {
     const postAnnouncement = (groupId, message) => {
         const entry = svcPostAnnouncement(groupId, authUser, message);
         if (entry) {
-            setGroups(listGroups());
+            if (!isFirestoreReady()) setGroups(listGroups());
             sendReminder({ userIds: getGroupMemberIds(groupId), title: '📢 Announcement', text: message, type: 'info' });
         }
         return entry;
@@ -455,12 +608,19 @@ export const AppProvider = ({ children }) => {
     const addChatReaction = (groupId, messageId, emoji) => {
         if (!authUser) return;
         svcAddReaction(groupId, messageId, emoji, authUser.id);
-        setGroups(listGroups());
+        if (!isFirestoreReady()) setGroups(listGroups());
     };
     const sendReminder = ({ userIds, title, text, type = 'info' }) => {
+        const now = Date.now();
+        if (now - lastReminderSentRef.current < 10_000) return [];
+        lastReminderSentRef.current = now;
         const created = svcSendReminder({ userIds, title, text, type: type });
         setReminders(prev => [...created, ...prev]);
         logAudit({ action: 'send reminder', targetType: 'reminder', targetId: created[0]?.id || null, newValue: { count: created.length, title, text } });
+        // Show a browser notification if the current user is one of the recipients.
+        if (authUser?.id && userIds.map(String).includes(String(authUser.id))) {
+            showBrowserNotification(title, text, { tag: 'susu-reminder' });
+        }
         return created;
     };
     const markReminderRead = (reminderId) => {
@@ -509,9 +669,9 @@ export const AppProvider = ({ children }) => {
             schedule, setSchedule,
             auditLogs, logAudit,
             settings, updateSetting,
-            appReady,
+            appReady, connectionTimedOut,
             dismissedNotifications,
-            recordPayment, confirmPayment, rejectPayment, reopenPayment, updatePayment,
+            recordPayment, confirmPayment, rejectPayment, reopenPayment, updatePayment, disputePayment, resolveDispute,
             completePayout, assignPayoutRecipient,
             registerMember, updateMember, approveUser, rejectUser, reinstateUser,
             createGroup, updateGroup,

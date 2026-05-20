@@ -6,7 +6,10 @@ export const setCurrencySymbol = (symbol) => {
         currentCurrencySymbol = symbol;
 };
 export const getCurrencySymbol = () => currentCurrencySymbol;
-export const fmt = (n) => `${currentCurrencySymbol} ${Number(n).toLocaleString()}`;
+export const fmt = (n) => {
+    const num = Number(n);
+    return `${currentCurrencySymbol} ${(Number.isFinite(num) ? num : 0).toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 export const initials = (name) => (name || "?").split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
 export const todayStr = () => new Date().toISOString().split("T")[0];
 // Crypto-safe reference generation (replaces Math.random)

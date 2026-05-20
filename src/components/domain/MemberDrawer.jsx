@@ -1,9 +1,11 @@
-import { X, CheckCircle, XCircle, Users, Phone, MapPin, CreditCard, Banknote, Calendar, FileCheck, FileX, Award, Sparkles, Trophy, Mail, Shield, Pencil, Save, } from 'lucide-react';
-import { useState } from 'react';
+import { X, CheckCircle, XCircle, Users, Phone, MapPin, CreditCard, Banknote, Calendar, FileCheck, FileX, Award, Sparkles, Trophy, Mail, Shield, Pencil, Save, Camera, ImagePlus, } from 'lucide-react';
+import { useState, useRef } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { fmt } from '../../utils/helpers';
 import { AssignGroupModal } from './AssignGroupModal';
 import { toast } from '../../utils/toast';
+import { setNameOverride, updateDisplayName } from '../../services/authService';
+import { uploadFile } from '../../services/storageService';
 const statusTone = {
     approved: 'bg-success/15 text-success border-success/30',
     pending: 'bg-primary/15 text-primary border-primary/30',
@@ -17,44 +19,100 @@ const roleTone = {
     member: 'bg-success/10 text-success border-success/20',
 };
 export function MemberDrawer({ user, onClose, onEdit }) {
-    const { authUser, groups, payments, approveUser, rejectUser, updateMember } = useAppContext();
+    const { authUser, groups, payments, users, approveUser, rejectUser, updateMember } = useAppContext();
+    // Always read the live user from context so the drawer reflects updates immediately
+    const liveUser = users.find(u => u.id === user.id) || user;
     const [assignOpen, setAssignOpen] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const [editDraft, setEditDraft] = useState({
-        fullName: user.fullName || user.name || '',
-        phone: user.phone || '',
-        address: user.address || '',
-        bankMomo: user.bankMomo || '',
-        ghanaCard: user.ghanaCard || '',
+        fullName: liveUser.fullName || liveUser.name || '',
+        phone: liveUser.phone || '',
+        address: liveUser.address || '',
+        bankMomo: liveUser.bankMomo || '',
+        ghanaCard: liveUser.ghanaCard || '',
     });
     const [editError, setEditError] = useState(null);
-    const myGroup = groups.find(g => g.id === user.groupId);
-    const myPayments = payments.filter(p => (p.memberId || p.userId) === user.id);
+    const [uploadingProfile, setUploadingProfile] = useState(false);
+    const [uploadingCover, setUploadingCover] = useState(false);
+    const profileInputRef = useRef(null);
+    const coverInputRef = useRef(null);
+
+    const displayProfilePic = liveUser.profilePic || liveUser.liveSelfie || null;
+    const displayCoverPic = liveUser.coverPic || null;
+
+    const handleProfilePicChange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploadingProfile(true);
+        try {
+            const url = await uploadFile(`users/${liveUser.id}/profile.jpg`, file);
+            if (url) {
+                updateMember(liveUser.id, { profilePic: url }, liveUser);
+                toast.success('Profile photo updated');
+            } else {
+                toast.error('Upload failed. Try again.');
+            }
+        } catch {
+            toast.error('Could not upload photo.');
+        } finally {
+            setUploadingProfile(false);
+            e.target.value = '';
+        }
+    };
+
+    const handleCoverPicChange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploadingCover(true);
+        try {
+            const url = await uploadFile(`users/${liveUser.id}/cover.jpg`, file);
+            if (url) {
+                updateMember(liveUser.id, { coverPic: url }, liveUser);
+                toast.success('Cover photo updated');
+            } else {
+                toast.error('Upload failed. Try again.');
+            }
+        } catch {
+            toast.error('Could not upload cover.');
+        } finally {
+            setUploadingCover(false);
+            e.target.value = '';
+        }
+    };
+
+    const myGroup = groups.find(g => g.id === liveUser.groupId);
+    const myPayments = payments.filter(p => (p.memberId || p.userId) === liveUser.id);
     const canManage = authUser && ['admin', 'manager'].includes(authUser.role);
-    const canEdit = authUser?.id === user.id || canManage;
-    const fullName = user.fullName || user.name || 'Member';
+    const canEdit = authUser?.id === liveUser.id || canManage;
+    const fullName = liveUser.fullName || liveUser.name || 'Member';
     const initials = fullName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
-    const isStaff = ['admin', 'manager', 'collector'].includes(user.role);
+    const isStaff = ['admin', 'manager', 'collector'].includes(liveUser.role);
 
     const handleSave = () => {
         if (!editDraft.fullName.trim()) { setEditError('Name is required.'); return; }
-        updateMember(user.id, {
+        const result = updateMember(liveUser.id, {
             fullName: editDraft.fullName.trim(),
             name: editDraft.fullName.trim(),
             phone: editDraft.phone.trim(),
             address: editDraft.address.trim(),
             bankMomo: editDraft.bankMomo.trim(),
             ghanaCard: editDraft.ghanaCard.trim(),
-        });
+        }, liveUser);
+        if (!result) { setEditError('Could not save profile. Try again.'); return; }
+        // If editing own profile, persist the real name so it survives sign-out
+        if (authUser?.id === liveUser.id) {
+            setNameOverride(authUser.email, editDraft.fullName.trim());
+            void updateDisplayName(editDraft.fullName.trim());
+        }
         toast.success('Profile updated');
         setEditMode(false);
         setEditError(null);
     };
     const docs = [
-        ['Ghana Card · Front', user.ghanaCardFront],
-        ['Ghana Card · Back', user.ghanaCardBack],
-        ['Passport photo', user.passportPic],
-        ['Live selfie', user.liveSelfie],
+        ['Ghana Card · Front', liveUser.ghanaCardFront],
+        ['Ghana Card · Back', liveUser.ghanaCardBack],
+        ['Passport photo', liveUser.passportPic],
+        ['Live selfie', liveUser.liveSelfie],
     ];
     const uploadedDocs = docs.filter(([, v]) => Boolean(v)).length;
     const totalContributed = myPayments
@@ -67,7 +125,7 @@ export function MemberDrawer({ user, onClose, onEdit }) {
           {/* Floating action buttons — positioned relative to the modal card */}
           <div className="absolute top-3 right-3 z-20 flex items-center gap-2">
             {canEdit && !editMode && (
-              <button type="button" onClick={() => { setEditDraft({ fullName: user.fullName || user.name || '', phone: user.phone || '', address: user.address || '', bankMomo: user.bankMomo || '', ghanaCard: user.ghanaCard || '' }); setEditError(null); setEditMode(true); }} aria-label="Edit profile" className="w-9 h-9 rounded-full bg-black/30 hover:bg-black/50 text-foreground flex items-center justify-center backdrop-blur-md transition-colors">
+              <button type="button" onClick={() => { setEditDraft({ fullName: liveUser.fullName || liveUser.name || '', phone: liveUser.phone || '', address: liveUser.address || '', bankMomo: liveUser.bankMomo || '', ghanaCard: liveUser.ghanaCard || '' }); setEditError(null); setEditMode(true); }} aria-label="Edit profile" className="w-9 h-9 rounded-full bg-black/30 hover:bg-black/50 text-foreground flex items-center justify-center backdrop-blur-md transition-colors">
                 <Pencil className="w-4 h-4"/>
               </button>
             )}
@@ -84,41 +142,96 @@ export function MemberDrawer({ user, onClose, onEdit }) {
           <div className="overflow-y-auto flex-1">
             {/* HERO BANNER */}
             <div className="relative">
-              <div className="h-32 bg-gradient-to-br from-primary via-primary/85 to-primary/55 relative overflow-hidden">
-                <div className=""/>
-                <div className="absolute -bottom-12 -left-6 w-40 h-40 rounded-full bg-border blur-3xl"/>
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_0%,rgba(255,255,255,0.18),transparent_60%)]"/>
+              {/* Cover photo area */}
+              <div className="h-36 bg-gradient-to-br from-primary via-primary/85 to-primary/55 relative overflow-hidden">
+                {displayCoverPic && (
+                  <img src={displayCoverPic} alt="Cover" className="absolute inset-0 w-full h-full object-cover"/>
+                )}
+                {/* Decorative glows (shown when no cover photo) */}
+                {!displayCoverPic && (
+                  <>
+                    <div className="absolute -bottom-12 -left-6 w-40 h-40 rounded-full bg-white/10 blur-3xl"/>
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_0%,rgba(255,255,255,0.18),transparent_60%)]"/>
+                  </>
+                )}
+                {/* Dark gradient at bottom so avatar area reads clearly */}
+                <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-black/20 to-transparent"/>
+
+                {/* Cover upload button */}
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => coverInputRef.current?.click()}
+                    disabled={uploadingCover}
+                    className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5 bg-black/50 backdrop-blur-sm text-white rounded-full px-2.5 py-1.5 text-xs font-semibold hover:bg-black/65 active:scale-95 transition-all shadow"
+                    aria-label="Change cover photo"
+                  >
+                    {uploadingCover
+                      ? <span className="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin"/>
+                      : <ImagePlus className="w-3 h-3"/>
+                    }
+                    <span>{uploadingCover ? 'Uploading…' : 'Cover'}</span>
+                  </button>
+                )}
               </div>
 
               {/* Avatar — overlapping the banner */}
               <div className="absolute inset-x-0 -bottom-12 flex justify-center">
                 <div className="relative">
-                  <div className="w-24 h-24 rounded-2xl bg-card border-4 border-card shadow-xl flex items-center justify-center overflow-hidden">
-                    {user.liveSelfie ? (<img src={user.liveSelfie} alt={fullName} className="w-full h-full object-cover"/>) : (<div className="w-full h-full rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-foreground text-2xl font-bold">
-                        {initials}
-                      </div>)}
+                  <div className="w-24 h-24 rounded-2xl bg-card border-4 border-card shadow-xl flex items-center justify-center overflow-hidden relative">
+                    {displayProfilePic
+                      ? <img src={displayProfilePic} alt={fullName} className="w-full h-full object-cover"/>
+                      : <div className="w-full h-full rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground text-2xl font-bold">{initials}</div>
+                    }
+                    {/* Loading overlay */}
+                    {uploadingProfile && (
+                      <div className="absolute inset-0 bg-black/55 flex items-center justify-center rounded-xl">
+                        <span className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"/>
+                      </div>
+                    )}
                   </div>
-                  {user.status === 'approved' && (<span className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-success border-2 border-card flex items-center justify-center shadow" aria-hidden>
+
+                  {/* Profile photo camera button */}
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => profileInputRef.current?.click()}
+                      disabled={uploadingProfile}
+                      className="absolute -bottom-1 -left-1 w-7 h-7 rounded-full bg-primary border-2 border-card flex items-center justify-center shadow hover:opacity-90 active:scale-90 transition-all"
+                      aria-label="Change profile photo"
+                    >
+                      <Camera className="w-3.5 h-3.5 text-primary-foreground"/>
+                    </button>
+                  )}
+
+                  {/* Status badge */}
+                  {liveUser.status === 'approved' && (
+                    <span className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-success border-2 border-card flex items-center justify-center shadow" aria-hidden>
                       <Shield className="w-3.5 h-3.5 text-card"/>
-                    </span>)}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
+
+            {/* Hidden file inputs */}
+            <input ref={profileInputRef} type="file" accept="image/*" className="sr-only" onChange={handleProfilePicChange}/>
+            <input ref={coverInputRef} type="file" accept="image/*" className="sr-only" onChange={handleCoverPicChange}/>
 
             {/* IDENTITY */}
             <div className="px-6 pt-16 pb-5 text-center">
               <h2 className="text-xl font-bold text-foreground tracking-tight">{fullName}</h2>
               <div className="mt-1 flex items-center justify-center gap-1.5 text-muted-foreground text-xs">
                 <Mail className="w-3 h-3"/>
-                <span className="truncate max-w-[16rem]">{user.email || '—'}</span>
+                <span className="truncate max-w-[16rem]">{liveUser.email || '—'}</span>
               </div>
 
               <div className="mt-3 flex items-center justify-center gap-2">
-                <Chip tone={roleTone[user.role] || 'bg-muted/30 text-muted-foreground border-border'}>
-                  {user.role}
+                <Chip tone={roleTone[liveUser.role] || 'bg-muted/30 text-muted-foreground border-border'}>
+                  {liveUser.role}
                 </Chip>
-                <Chip tone={statusTone[user.status] || 'bg-muted/30 text-muted-foreground border-border'}>
-                  {user.status}
+                <Chip tone={statusTone[liveUser.status] || 'bg-muted/30 text-muted-foreground border-border'}>
+                  {liveUser.status}
                 </Chip>
               </div>
             </div>
@@ -131,27 +244,27 @@ export function MemberDrawer({ user, onClose, onEdit }) {
                     <StatTile icon={CheckCircle} label="Payments" value={`${paidCount}`}/>
                     <StatTile icon={FileCheck} label="Docs" value={`${uploadedDocs}/${docs.length}`}/>
                   </>) : (<>
-                    <StatTile icon={Sparkles} label="Streak" value={`${user.streak || 0}`} accent="text-yellow-400"/>
-                    <StatTile icon={Trophy} label="Points" value={`${user.points || 0}`} accent="text-primary"/>
-                    <StatTile icon={Award} label="Badge" value={user.badges?.includes('top') ? '🏆' : user.badges?.includes('on-time') ? '⭐' : user.badges?.length ? '💎' : '—'} accent="text-emerald-400"/>
+                    <StatTile icon={Sparkles} label="Streak" value={`${liveUser.streak || 0}`} accent="text-yellow-400"/>
+                    <StatTile icon={Trophy} label="Points" value={`${liveUser.points || 0}`} accent="text-primary"/>
+                    <StatTile icon={Award} label="Badge" value={liveUser.badges?.includes('top') ? '🏆' : liveUser.badges?.includes('on-time') ? '⭐' : liveUser.badges?.length ? '💎' : '—'} accent="text-emerald-400"/>
                   </>)}
               </div>
             </div>
 
             {/* QUICK ACTIONS */}
-            {canManage && user.status === 'pending' && (<div className="px-6 mb-5">
+            {canManage && liveUser.status === 'pending' && (<div className="px-6 mb-5">
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => { approveUser(user.id); toast.success(`${fullName} approved`); onClose(); }} className="flex-1 bg-success text-foreground py-3 rounded-2xl flex items-center justify-center gap-2 font-bold shadow-lg shadow-success/20">
+                  <button type="button" onClick={() => { approveUser(liveUser.id); toast.success(`${fullName} approved`); onClose(); }} className="flex-1 bg-success text-foreground py-3 rounded-2xl flex items-center justify-center gap-2 font-bold shadow-lg shadow-success/20">
                     <CheckCircle className="w-4 h-4"/>
                     Approve
                   </button>
-                  <button type="button" onClick={() => { rejectUser(user.id); toast.error(`${fullName} rejected`); onClose(); }} className="flex-1 bg-destructive/15 text-destructive border border-destructive/30 py-3 rounded-2xl flex items-center justify-center gap-2 font-bold">
+                  <button type="button" onClick={() => { if (!window.confirm(`Reject ${fullName}'s registration? This cannot be undone.`)) return; rejectUser(liveUser.id); toast.error(`${fullName} rejected`); onClose(); }} className="flex-1 bg-destructive/15 text-destructive border border-destructive/30 py-3 rounded-2xl flex items-center justify-center gap-2 font-bold">
                     <XCircle className="w-4 h-4"/>
                     Reject
                   </button>
                 </div>
               </div>)}
-            {canManage && user.role === 'member' && user.status === 'approved' && !user.groupId && (<div className="px-6 mb-5">
+            {canManage && liveUser.role === 'member' && liveUser.status === 'approved' && !liveUser.groupId && (<div className="px-6 mb-5">
                 <button type="button" onClick={() => setAssignOpen(true)} className="w-full bg-primary text-primary-foreground py-3 rounded-2xl flex items-center justify-center gap-2 font-bold shadow-lg shadow-primary/20">
                   <Users className="w-4 h-4"/>
                   Assign to Group
@@ -176,11 +289,11 @@ export function MemberDrawer({ user, onClose, onEdit }) {
                   </div>
                 ) : (
                   <>
-                    <InfoRow icon={CreditCard} label="Ghana Card" value={user.ghanaCard || '—'}/>
-                    <InfoRow icon={Phone} label="Phone" value={user.phone || '—'}/>
-                    <InfoRow icon={MapPin} label="Address" value={user.address || '—'}/>
-                    <InfoRow icon={Banknote} label="Bank / MoMo" value={user.bankMomo || '—'}/>
-                    <InfoRow icon={Calendar} label="Joined" value={user.joinedAt || '—'} last/>
+                    <InfoRow icon={CreditCard} label="Ghana Card" value={liveUser.ghanaCard || '—'}/>
+                    <InfoRow icon={Phone} label="Phone" value={liveUser.phone || '—'}/>
+                    <InfoRow icon={MapPin} label="Address" value={liveUser.address || '—'}/>
+                    <InfoRow icon={Banknote} label="Bank / MoMo" value={liveUser.bankMomo || '—'}/>
+                    <InfoRow icon={Calendar} label="Joined" value={liveUser.joinedAt || '—'} last/>
                   </>
                 )}
               </Section>
@@ -256,7 +369,7 @@ export function MemberDrawer({ user, onClose, onEdit }) {
         </div>
       </div>
 
-      {assignOpen && (<AssignGroupModal memberId={user.id} onClose={() => setAssignOpen(false)} onAssigned={() => { setAssignOpen(false); onClose(); }}/>)}
+      {assignOpen && (<AssignGroupModal memberId={liveUser.id} onClose={() => setAssignOpen(false)} onAssigned={() => { setAssignOpen(false); onClose(); }}/>)}
     </>);
 }
 // ─── helpers ──────────────────────────────────────────────────────────────
@@ -294,7 +407,7 @@ function EditField({ label, value, onChange, placeholder, type = 'text' }) {
             value={value}
             onChange={e => onChange(e.target.value)}
             placeholder={placeholder}
-            className="w-full bg-background border border-border rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all"
+            className="w-full bg-background border border-border rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
           />
         </div>
     );

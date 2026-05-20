@@ -21,8 +21,8 @@ export function QuickActionSheet({ onClose, onNavigate }) {
         return false;
     });
     return (<div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-card rounded-t-3xl border-t border-x border-border w-full max-w-md p-6 pb-10 shadow-2xl animate-in slide-in-from-bottom" onClick={(e) => e.stopPropagation()}>
-        <div className="w-12 h-1.5 bg-muted rounded-full mx-auto mb-5"/>
+      <div className="bg-card rounded-t-[2rem] border-t border-x border-border w-full max-w-md p-6 pb-[calc(2.5rem+env(safe-area-inset-bottom,0px))] shadow-2xl animate-in slide-in-from-bottom" onClick={(e) => e.stopPropagation()}>
+        <div className="w-9 h-[3px] rounded-full bg-border mx-auto mb-5"/>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold">Quick actions</h3>
           <button type="button" onClick={onClose} className="p-2 rounded-xl hover:bg-muted/50">
@@ -33,7 +33,7 @@ export function QuickActionSheet({ onClose, onNavigate }) {
         <div className="space-y-2">
           {allowedActions.map(action => {
             const Icon = action.icon;
-            return (<button key={action.id} type="button" onClick={() => { onNavigate(action.id); onClose(); }} className="w-full flex items-center gap-3 p-3 rounded-2xl bg-input-background border border-border hover:bg-muted/30 transition-colors text-left">
+            return (<button key={action.id} type="button" onClick={() => { onNavigate(action.id); onClose(); }} className="w-full flex items-center gap-3 p-3 rounded-2xl bg-card border-2 border-border hover:bg-muted/30 transition-colors text-left">
                 <div className={`w-11 h-11 rounded-2xl bg-muted/40 flex items-center justify-center ${action.tone}`}>
                   <Icon className="w-5 h-5"/>
                 </div>
