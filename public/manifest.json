@@ -3,10 +3,16 @@
   "name": "Excellent Susu — Community Savings",
   "icons": [
     {
-      "src": "logo.jpg",
-      "type": "image/jpeg",
-      "sizes": "any",
+      "src": "favicon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
       "purpose": "any maskable"
+    },
+    {
+      "src": "apple-touch-icon.png",
+      "type": "image/png",
+      "sizes": "180x180",
+      "purpose": "any"
     }
   ],
   "start_url": ".",
