@@ -1,7 +1,7 @@
 import { readStore, writeStore } from './storage';
 import { MOCK_USERS } from '../data/mockData';
 import { genId } from '../utils/helpers';
-import { replaceCollection, upsertDoc } from './firestoreSync';
+import { replaceCollection, upsertDoc, isFirestoreReady } from './firestoreSync';
 const STORE_KEY = 'users';
 const VALID_ROLES = new Set(['admin', 'manager', 'collector', 'member']);
 export function listUsers() {
@@ -36,23 +36,24 @@ export function createUser(input) {
         joinedAt: input.joinedAt || now.split('T')[0],
     };
     const all = listUsers();
-    replaceUsers([newUser, ...all]);
+    if (!isFirestoreReady()) replaceUsers([newUser, ...all]);
     void upsertDoc('users', newUser);
     return newUser;
 }
 export function updateUser(userId, patch, currentData = null) {
     const all = listUsers();
     let next = null;
-    if (all.length > 0) {
-        // Demo/localStorage mode: find the user in the local list
+    if (!isFirestoreReady() && all.length > 0) {
+        // Demo/localStorage mode: find the user in the local list and persist
         const updated = all.map(u => {
             if (String(u.id) !== String(userId)) return u;
             next = { ...u, ...patch, updatedAt: new Date().toISOString() };
             return next;
         });
         if (next) replaceUsers(updated);
-    } else if (currentData) {
-        // Firestore mode: localStorage is empty; build from provided snapshot
+    }
+    if (!next && currentData) {
+        // Firestore mode: build the updated doc from the Firestore snapshot
         next = { ...currentData, ...patch, updatedAt: new Date().toISOString() };
     }
     if (next) void upsertDoc('users', next);

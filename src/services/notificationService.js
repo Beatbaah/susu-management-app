@@ -52,11 +52,12 @@ export function markAllRead() {
     replaceReminders(updated);
 }
 export function deleteReminder(reminderId) {
-    if (!isFirestoreReady()) {
-        const updated = listReminders().filter(r => r.id !== reminderId);
-        replaceReminders(updated);
+    if (isFirestoreReady()) {
+        void removeDoc(FIRESTORE_COLLECTION, reminderId);
+        return;
     }
-    void removeDoc(FIRESTORE_COLLECTION, reminderId);
+    const updated = listReminders().filter(r => r.id !== reminderId);
+    replaceReminders(updated);
 }
 export function clearReminders() {
     if (isFirestoreReady()) {

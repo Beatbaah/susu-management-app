@@ -92,8 +92,9 @@ export const AppProvider = ({ children }) => {
     // Register Firestore write-error handler once so failed syncs surface as toasts.
     useState(() => {
         if (isFirestoreReady()) {
-            setWriteErrorHandler(() => {
-                toast.error('Sync failed — change saved locally but may not reach the server. Check your connection.');
+            setWriteErrorHandler((collection, error) => {
+                const code = error?.code || error?.message || 'unknown';
+                toast.error(`Sync failed (${collection}: ${code}) — check your connection.`);
             });
         }
     });
@@ -182,13 +183,16 @@ export const AppProvider = ({ children }) => {
                 if (changed) setPayments(updated);
             } else {
                 const today = new Date().toISOString().split('T')[0];
+                // Only managers can update payment status in Firestore.
+                // Use authUserRef to read the current role without a stale closure.
+                const canWrite = ['admin', 'manager'].includes(authUserRef.current?.role);
                 setPayments(prev => {
                     let changed = false;
                     const next = prev.map(p => {
                         if (p.status === 'pending' && p.dueDate && p.dueDate < today) {
                             changed = true;
                             const u = { ...p, status: 'overdue', updatedAt: new Date().toISOString() };
-                            void upsertDoc('payments', u);
+                            if (canWrite) void upsertDoc('payments', u);
                             return u;
                         }
                         return p;

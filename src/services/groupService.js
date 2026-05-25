@@ -1,7 +1,7 @@
 import { readStore, writeStore } from './storage';
 import { MOCK_GROUPS } from '../data/mockData';
 import { genId } from '../utils/helpers';
-import { replaceCollection, upsertDoc, removeDoc } from './firestoreSync';
+import { replaceCollection, upsertDoc, removeDoc, isFirestoreReady } from './firestoreSync';
 import { validateGroup } from '../validation/groupRules';
 import { listUsers } from './userService';
 const STORE_KEY = 'groups';
@@ -40,7 +40,7 @@ export function createGroup(input) {
         createdAt: now,
         updatedAt: now,
     };
-    replaceGroups([newGroup, ...listGroups()]);
+    if (!isFirestoreReady()) replaceGroups([newGroup, ...listGroups()]);
     void upsertDoc('groups', newGroup);
     return newGroup;
 }
@@ -60,7 +60,7 @@ export function updateGroup(groupId, patch) {
         return next;
     });
     if (next) {
-        replaceGroups(updated);
+        if (!isFirestoreReady()) replaceGroups(updated);
         void upsertDoc('groups', next);
     }
     return next;

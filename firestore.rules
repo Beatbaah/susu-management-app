@@ -155,7 +155,9 @@ service cloud.firestore {
       allow update: if isManager()
         || (isRealAuth() && resource.data.userId == request.auth.uid
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']));
-      allow delete: if false;
+      // Owner or manager can delete a notification.
+      allow delete: if isManager()
+        || (isRealAuth() && resource.data.userId == request.auth.uid);
     }
 
     // ── /auditLogs ────────────────────────────────────────────────────────
