@@ -109,7 +109,7 @@ export function Analytics() {
         return Math.round((totalDays / paid.length) * 10) / 10;
     }, [payments]);
     const memberStats = useMemo(() => {
-        const memberUsers = users.filter(u => u.role === 'member');
+        const memberUsers = users.filter(u => u.role === 'member' && u.status === 'approved');
         return memberUsers.map(u => {
             const memberPayments = payments.filter(p => (p.memberId || p.userId) === u.id);
             const paid = memberPayments.filter(p => p.status === 'paid');

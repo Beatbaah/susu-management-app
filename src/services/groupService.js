@@ -1,7 +1,7 @@
 import { readStore, writeStore } from './storage';
 import { MOCK_GROUPS } from '../data/mockData';
 import { genId } from '../utils/helpers';
-import { replaceCollection, upsertDoc } from './firestoreSync';
+import { replaceCollection, upsertDoc, removeDoc } from './firestoreSync';
 import { validateGroup } from '../validation/groupRules';
 import { listUsers } from './userService';
 const STORE_KEY = 'groups';
@@ -80,4 +80,12 @@ export function advanceRound(groupId) {
         return null;
     const cap = group.totalRounds || group.totalSlots || (group.currentRound + 1);
     return updateGroup(groupId, { currentRound: Math.min((group.currentRound || 0) + 1, cap) });
+}
+export function deleteGroup(groupId) {
+    const all = listGroups();
+    const target = all.find(g => String(g.id) === String(groupId));
+    if (!target) return null;
+    replaceGroups(all.filter(g => String(g.id) !== String(groupId)));
+    void removeDoc('groups', String(groupId));
+    return target;
 }

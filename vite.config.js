@@ -11,6 +11,11 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.js'],
+    coverage: { reporter: ['text', 'html'], include: ['src/utils/**', 'src/validation/**'] },
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

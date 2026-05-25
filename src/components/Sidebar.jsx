@@ -7,12 +7,13 @@ export function Sidebar({ activePage, onNavigate, user, onLogout, className }) {
         {
             label: 'Main',
             items: [
-                { id: 'dashboard', icon: LayoutGrid, label: 'Overview' },
-                { id: 'members', icon: Users, label: 'Members' },
-                { id: 'groups', icon: Users2, label: 'Susu Groups' },
-                { id: 'payments', icon: Wallet, label: 'Payments' },
-                { id: 'payout', icon: Calendar, label: 'Payouts' },
-                { id: 'calendar', icon: CalendarDays, label: 'Calendar' },
+                { id: 'portal',    icon: LayoutGrid,  label: 'Home' },        // member personal home
+                { id: 'dashboard', icon: LayoutGrid,  label: 'Overview' },    // staff dashboard
+                { id: 'members',   icon: Users,       label: 'Members' },
+                { id: 'groups',    icon: Users2,      label: 'Susu Groups' },
+                { id: 'payments',  icon: Wallet,      label: 'Payments' },
+                { id: 'payout',    icon: Calendar,    label: 'Payouts' },
+                { id: 'calendar',  icon: CalendarDays, label: 'Calendar' },
             ],
         },
         {
@@ -82,7 +83,7 @@ export function Sidebar({ activePage, onNavigate, user, onLogout, className }) {
               <div className="space-y-0.5">
                 {section.items.map((item) => {
                   const Icon = item.icon;
-                  const isActive = (activePage === 'portal' ? 'dashboard' : activePage) === item.id;
+                  const isActive = activePage === item.id;
                   return (
                     <button
                       key={item.id}

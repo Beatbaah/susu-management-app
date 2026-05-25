@@ -57,8 +57,9 @@ export function Calendar() {
             });
         });
         schedule.forEach(s => {
-            if (!s.date) return;
-            const d = new Date(s.date);
+            const rawDate = s.scheduledDate || s.date;
+            if (!rawDate) return;
+            const d = new Date(rawDate);
             if (d.getFullYear() !== cur.year || d.getMonth() !== cur.month) return;
             const member = users.find(u => u.id === (s.memberId || s.recipientId));
             const group = groups.find(g => g.id === s.groupId);
@@ -66,7 +67,7 @@ export function Calendar() {
                 type: 'payout',
                 label: member?.fullName || member?.name || 'Payout',
                 sub: group?.groupName || group?.name || '',
-                amount: Number(s.amount || 0),
+                amount: Number(s.payoutAmount || s.amount || 0),
             });
         });
         return map;

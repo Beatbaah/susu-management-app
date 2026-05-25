@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Megaphone } from 'lucide-react';
+import { Megaphone, FileDown } from 'lucide-react';
 import { cn } from '../ui/utils';
 
 const formatTime = (iso) => {
@@ -59,7 +59,7 @@ function ReactionPills({ reactions, currentUserId, onReact }) {
     );
 }
 
-export function ChatBubble({ isOwn, senderName, senderRole, message, time, type = 'message', reactions = {}, onReact, msgId, currentUserId }) {
+export function ChatBubble({ isOwn, senderName, senderRole, message, time, type = 'message', reactions = {}, onReact, msgId, currentUserId, mediaUrl, mediaName, mediaType }) {
     const [pickerOpen, setPickerOpen] = useState(false);
     const initials = (senderName || '?').split(' ').map(n => n[0]).join('').slice(0, 2);
 
@@ -127,13 +127,29 @@ export function ChatBubble({ isOwn, senderName, senderRole, message, time, type 
                     )}
                     <div
                         className={cn(
-                            'rounded-2xl px-4 py-3 shadow-sm',
+                            'rounded-2xl shadow-sm overflow-hidden',
+                            type === 'media' && mediaUrl && mediaType?.startsWith('image/')
+                                ? (isOwn ? 'bg-primary rounded-tr-none' : 'bg-card border border-border rounded-tl-none')
+                                : 'px-4 py-3',
                             isOwn
                                 ? 'bg-primary text-primary-foreground rounded-tr-none'
                                 : 'bg-card border border-border text-foreground rounded-tl-none'
                         )}
                     >
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{message}</p>
+                        {type === 'media' && mediaUrl ? (
+                            mediaType?.startsWith('image/') ? (
+                                <img src={mediaUrl} alt={mediaName || 'attachment'}
+                                    className="max-w-[240px] w-full rounded-2xl block"/>
+                            ) : (
+                                <a href={mediaUrl} target="_blank" rel="noopener noreferrer"
+                                    className="flex items-center gap-2 text-sm underline py-1">
+                                    <FileDown className="w-4 h-4 flex-shrink-0"/>
+                                    <span className="truncate">{mediaName || 'Download file'}</span>
+                                </a>
+                            )
+                        ) : (
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{message}</p>
+                        )}
                     </div>
                     <p className={cn('text-xs text-muted-foreground mt-1.5 px-1', isOwn && 'text-right')}>
                         {formatTime(time)}

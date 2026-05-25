@@ -5,6 +5,7 @@ import { ShieldAlert } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { Header } from "./components/Header";
 import { MobileNavigation } from "./components/MobileNavigation";
+import { SignOutConfirmModal } from "./components/ui/SignOutConfirmModal";
 // Security
 import { RoleGuard } from "./security";
 // Domain modals invoked from the global shell
@@ -28,13 +29,20 @@ const Calendar      = React.lazy(() => import("./pages/Calendar").then(m => ({ d
 const AuthScreen    = React.lazy(() => import("./pages/AuthScreen"));
 import { signOut as signOutUser } from "./services/authService";
 import { mobileNavHidden } from "./services/uiBus";
+import { db } from "./utils/firebase";
+import { collection, getDocs } from "firebase/firestore";
 // Context
 import { useAppContext } from "./context/AppContext";
 import { useSessionTimeout } from "./hooks/useSessionTimeout";
 import { SessionTimeoutModal } from "./components/SessionTimeoutModal";
 export default function App() {
     const { authUser, setAuthUser, users, payments, groups, reminders, settings, dismissedNotifications, registerMember, logAudit, connectionTimedOut } = useAppContext();
-    const [page, setPage] = useState("dashboard");
+    const KNOWN_PAGES = new Set(['dashboard', 'portal', 'analytics', 'members', 'groups', 'payments', 'defaulters', 'payout', 'leaderboard', 'chat', 'settings', 'audit', 'receipts', 'reminders', 'calendar', 'profile']);
+    const [page, setPage] = useState(() => {
+        const hash = window.location.hash.slice(1);
+        return KNOWN_PAGES.has(hash) ? hash : 'dashboard';
+    });
+    const [publicGroups, setPublicGroups] = useState([]);
     const [payOpen, setPayOpen] = useState(false);
     const [quickActionsOpen, setQuickActionsOpen] = useState(false);
     const [profileDrawerOpen, setProfileDrawerOpen] = useState(false);
@@ -60,14 +68,17 @@ export default function App() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [globalSearch, setGlobalSearch] = useState("");
     const [isOffline, setIsOffline] = useState(typeof navigator !== "undefined" ? !navigator.onLine : false);
+    const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
     const lastMainScrollY = useRef(0);
 
     const handleLogout = async () => {
         logAudit?.({ action: "logout", targetType: "user", targetId: authUser?.id });
         await signOutUser();
         setAuthUser(null);
+        window.location.hash = '';
         setPage("dashboard");
         setSidebarOpen(false);
+        setShowSignOutConfirm(false);
     };
 
     const { showWarning, remainingSeconds, extend } = useSessionTimeout({
@@ -108,6 +119,41 @@ export default function App() {
             window.removeEventListener("online", onOnline);
         };
     }, []);
+
+    useEffect(() => {
+        if (authUser) {
+            window.location.hash = page;
+        } else {
+            window.location.hash = '';
+        }
+    }, [page, authUser]);
+
+    useEffect(() => {
+        const onHashChange = () => {
+            if (!authUser) return;
+            const hash = window.location.hash.slice(1);
+            if (KNOWN_PAGES.has(hash)) setPage(hash);
+        };
+        window.addEventListener('hashchange', onHashChange);
+        return () => window.removeEventListener('hashchange', onHashChange);
+    }, [authUser]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Fetch groups without auth so the registration dropdown is populated
+    // for new members visiting the public registration page.
+    useEffect(() => {
+        if (authUser || !db) return;
+        getDocs(collection(db, 'groups'))
+            .then(snap => {
+                const items = snap.docs.map(d => {
+                    const g = { ...d.data(), id: d.id };
+                    const groupName = g.groupName || g.name || '';
+                    const contributionAmount = Number(g.contributionAmount ?? g.contribution ?? 0);
+                    return { ...g, groupName, name: groupName, contributionAmount };
+                });
+                setPublicGroups(items);
+            })
+            .catch(() => { /* silently fall back to empty list */ });
+    }, [authUser]);
+
     const handleRegister = (user) => {
         return registerMember(user);
     };
@@ -119,7 +165,7 @@ export default function App() {
     }, [effectivePage]);
     if (!authUser) {
         return (<Suspense fallback={<PageFallback />}>
-        <AuthScreen onLogin={(u) => setAuthUser(u)} onRegister={handleRegister} registrationGroups={groups}/>
+        <AuthScreen onLogin={(u) => setAuthUser(u)} onRegister={handleRegister} registrationGroups={publicGroups}/>
       </Suspense>);
     }
     const pendingRegistrations = users.filter(user => user.role === "member" && user.status === "pending" && !dismissedNotifications.members.includes(user.id)).length;
@@ -158,14 +204,14 @@ export default function App() {
                 case "receipts": return <Receipts />;
                 case "reminders": return <Reminders />;
                 case "calendar": return <Calendar />;
-                case "profile": return <Profile user={authUser} onNavigate={setPage} onLogout={handleLogout}/>;
+                case "profile": return <Profile user={authUser} onNavigate={setPage} onLogout={() => setShowSignOutConfirm(true)}/>;
                 default: return <Dashboard user={authUser} onNavigate={setPage}/>;
             }
         })();
         return <RoleGuard page={effectivePage}>{inner}</RoleGuard>;
     };
     return (<div className="flex h-[100dvh] w-full bg-background overflow-hidden">
-        <Sidebar activePage={effectivePage} onNavigate={(p) => setPage(p)} user={authUser} onLogout={handleLogout} className="hidden md:flex"/>
+        <Sidebar activePage={effectivePage} onNavigate={(p) => setPage(p)} user={authUser} onLogout={() => setShowSignOutConfirm(true)} className="hidden md:flex"/>
 
         {sidebarOpen && (
           <div
@@ -181,7 +227,7 @@ export default function App() {
               activePage={effectivePage}
               onNavigate={(p) => { setPage(p); setSidebarOpen(false); }}
               user={authUser}
-              onLogout={handleLogout}
+              onLogout={() => { setSidebarOpen(false); setShowSignOutConfirm(true); }}
             />
           </div>
         )}
@@ -245,6 +291,8 @@ export default function App() {
             onLogout={handleLogout}
           />
         )}
+
+        <SignOutConfirmModal open={showSignOutConfirm} onCancel={() => setShowSignOutConfirm(false)} onConfirm={handleLogout} />
       </div>);
 }
 /** Branded fallback shown while a lazy page chunk is loading. */

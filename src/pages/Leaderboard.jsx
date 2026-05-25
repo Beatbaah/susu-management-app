@@ -6,7 +6,7 @@ import { cn } from '../components/ui/utils';
 export function Leaderboard() {
     const { authUser, users, payments, groups } = useAppContext();
     const rankings = useMemo(() => {
-        const members = users.filter(m => m.role === 'member' && m.status !== 'rejected');
+        const members = users.filter(m => m.role === 'member' && m.status === 'approved');
         const computed = members.map(member => {
             const memberPayments = payments.filter(p => (p.memberId || p.userId) === member.id);
             const paidPayments = memberPayments.filter(p => p.status === 'paid');
@@ -38,6 +38,7 @@ export function Leaderboard() {
                 streak,
                 points,
                 badges: (member.badges || []),
+                status: member.status || 'approved',
                 color: member.color || '#6491DE',
                 initials: (member.fullName || member.name || '?').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase(),
             };

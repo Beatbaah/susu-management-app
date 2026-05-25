@@ -1,4 +1,4 @@
-import { Search, Plus, Users, X, Layers, Wallet, Pencil, CheckCircle, Clock, AlertCircle, Link2 } from 'lucide-react';
+import { Search, Plus, Users, X, Layers, Wallet, Pencil, CheckCircle, Clock, AlertCircle, Link2, Trash2 } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { fmt } from '../utils/helpers';
@@ -13,16 +13,26 @@ const EMPTY_GROUP_DRAFT = {
     totalRounds: '12',
     color: '#6491DE',
     cashoutAmount: '',
+    bankName: '',
+    accountName: '',
+    accountNumber: '',
 };
-const COLORS = ["#6491DE", "#073D7F", "#3B5FBF", "#8B5CF6", "#F59E0B", "#10B981", "#EC4899", "#0EA5E9"];
+const COLORS = [
+    "#6491DE", "#073D7F", "#3B5FBF", "#2563EB",
+    "#8B5CF6", "#7C3AED", "#A855F7", "#EC4899",
+    "#F43F5E", "#EF4444", "#F97316", "#F59E0B",
+    "#EAB308", "#10B981", "#059669", "#14B8A6",
+    "#0EA5E9", "#06B6D4", "#64748B", "#6B7280",
+];
 export function Groups() {
-    const { authUser, groups, users, payments, createGroup, updateGroup, appReady } = useAppContext();
+    const { authUser, groups, users, payments, createGroup, updateGroup, deleteGroup, appReady } = useAppContext();
     const [search, setSearch] = useState('');
     const [dialogOpen, setDialogOpen] = useState(false);
     const [draft, setDraft] = useState(EMPTY_GROUP_DRAFT);
     const [dialogError, setDialogError] = useState(null);
     const [editingId, setEditingId] = useState(null);
     const [detailGroup, setDetailGroup] = useState(null);
+    const [confirmDeleteId, setConfirmDeleteId] = useState(null);
     const canAdd = authUser && ['admin', 'manager'].includes(authUser.role);
     const canEdit = canAdd;
     const openCreateDialog = () => {
@@ -40,6 +50,9 @@ export function Groups() {
             totalRounds: String(g.totalRounds || g.totalSlots || '12'),
             color: String(g.color || '#6491DE'),
             cashoutAmount: String(g.cashoutAmount || (g.contributionAmount || g.contribution || 0) * (g.totalRounds || g.totalSlots || 1)),
+            bankName: String(g.bankName || ''),
+            accountName: String(g.accountName || ''),
+            accountNumber: String(g.accountNumber || ''),
         });
         setEditingId(g.id);
         setDialogOpen(true);
@@ -64,7 +77,7 @@ export function Groups() {
             setDialogError(v.message || 'Invalid input.');
             return;
         }
-        const payload = {
+        const basePayload = {
             groupName: draft.groupName.trim(),
             name: draft.groupName.trim(),
             contributionAmount: Number(draft.contributionAmount),
@@ -74,19 +87,25 @@ export function Groups() {
             totalSlots: Number(draft.totalRounds),
             color: draft.color,
             cashoutAmount: draft.cashoutAmount ? Number(draft.cashoutAmount) : Number(draft.contributionAmount) * Number(draft.totalRounds),
-            members: [],
-            chat: [],
-            currentRound: 1,
+            bankName: draft.bankName.trim(),
+            accountName: draft.accountName.trim(),
+            accountNumber: draft.accountNumber.trim(),
         };
         if (editingId != null) {
-            updateGroup(editingId, payload);
+            updateGroup(editingId, basePayload);
             toast.success(`Updated "${draft.groupName.trim()}"`);
         }
         else {
-            createGroup(payload);
+            createGroup({ ...basePayload, members: [], chat: [], currentRound: 1 });
             toast.success(`Created group "${draft.groupName.trim()}"`);
         }
         closeDialog();
+    };
+    const handleDelete = (groupId) => {
+        deleteGroup(groupId);
+        setConfirmDeleteId(null);
+        setDetailGroup(null);
+        toast.success('Group deleted.');
     };
     const groupsWithDetails = useMemo(() => groups.map(group => {
         const memberCount = Array.isArray(group.members) ? group.members.length : 0;
@@ -243,6 +262,25 @@ export function Groups() {
                   ))}
                 </div>
               </div>
+              {/* Bank account details — shown to members in PayModal for bank transfers */}
+              <div className="pt-2 border-t border-border/50">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Bank Account (for transfers)</p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-medium text-foreground/70 mb-1.5 block">Bank Name</label>
+                    <input type="text" placeholder="e.g. GCB Bank" value={draft.bankName} onChange={(e) => setDraft(prev => ({ ...prev, bankName: e.target.value }))} className="w-full bg-card border-2 border-border rounded-2xl px-4 py-3.5 text-sm font-medium text-foreground placeholder:text-muted-foreground focus:bg-card focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"/>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-foreground/70 mb-1.5 block">Account Name</label>
+                    <input type="text" placeholder="e.g. Excellent Susu Group" value={draft.accountName} onChange={(e) => setDraft(prev => ({ ...prev, accountName: e.target.value }))} className="w-full bg-card border-2 border-border rounded-2xl px-4 py-3.5 text-sm font-medium text-foreground placeholder:text-muted-foreground focus:bg-card focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"/>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-foreground/70 mb-1.5 block">Account Number</label>
+                    <input type="text" placeholder="e.g. 1234567890123" value={draft.accountNumber} onChange={(e) => setDraft(prev => ({ ...prev, accountNumber: e.target.value }))} inputMode="numeric" className="w-full bg-card border-2 border-border rounded-2xl px-4 py-3.5 text-sm font-medium text-foreground placeholder:text-muted-foreground focus:bg-card focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"/>
+                  </div>
+                </div>
+              </div>
+
               {dialogError && (
                 <div className="flex items-center gap-2 p-3.5 rounded-2xl bg-destructive/10 border border-destructive/20 text-destructive text-xs font-bold">
                   {dialogError}
@@ -269,14 +307,41 @@ export function Groups() {
           users={users}
           payments={payments}
           canEdit={canEdit}
+          canDelete={canAdd}
           onClose={() => setDetailGroup(null)}
           onEdit={() => { setDetailGroup(null); openEditDialog(detailGroup); }}
+          onDelete={() => setConfirmDeleteId(detailGroup.id)}
         />
       )}
+
+      {confirmDeleteId && (() => {
+        const g = groups.find(x => x.id === confirmDeleteId);
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setConfirmDeleteId(null)}>
+            <div className="bg-card w-full max-w-sm rounded-2xl border border-border shadow-2xl p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+              <div className="w-12 h-12 rounded-2xl bg-destructive/15 flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-6 h-6 text-destructive"/>
+              </div>
+              <h3 className="text-lg font-bold text-foreground text-center mb-1">Delete group?</h3>
+              <p className="text-muted-foreground text-sm text-center mb-6">
+                <span className="font-semibold text-foreground">{g?.groupName || g?.name}</span> and all its data will be permanently removed. This cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setConfirmDeleteId(null)} className="flex-1 py-3 rounded-xl bg-muted text-foreground text-sm font-semibold hover:bg-muted/80 transition-colors">
+                  Cancel
+                </button>
+                <button type="button" onClick={() => handleDelete(confirmDeleteId)} className="flex-1 py-3 rounded-xl bg-destructive text-white text-sm font-bold hover:opacity-90 active:scale-[0.98] transition-all">
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>);
 }
 
-function GroupDetailPanel({ group, users, payments, canEdit, onClose, onEdit }) {
+function GroupDetailPanel({ group, users, payments, canEdit, canDelete, onClose, onEdit, onDelete }) {
     const members = Array.isArray(group.members) ? group.members : [];
     const accent = group.color || '#6491DE';
     const totalSlots = group.totalSlots || group.totalRounds || 1;
@@ -317,6 +382,11 @@ function GroupDetailPanel({ group, users, payments, canEdit, onClose, onEdit }) 
                         {canEdit && (
                             <button type="button" onClick={onEdit} className="w-9 h-9 rounded-xl bg-muted/50 hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors" aria-label="Edit group">
                                 <Pencil className="w-4 h-4"/>
+                            </button>
+                        )}
+                        {canDelete && (
+                            <button type="button" onClick={onDelete} className="w-9 h-9 rounded-xl bg-destructive/10 hover:bg-destructive/20 flex items-center justify-center text-destructive transition-colors" aria-label="Delete group">
+                                <Trash2 className="w-4 h-4"/>
                             </button>
                         )}
                         <button type="button" onClick={onClose} className="w-9 h-9 rounded-xl bg-muted/50 hover:bg-muted flex items-center justify-center" aria-label="Close">

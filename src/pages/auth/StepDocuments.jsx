@@ -14,7 +14,7 @@ export function StepDocuments({ uploadNames, readUpload, setStepError }) {
                 <FileCheck className="h-5 w-5 text-primary flex-shrink-0"/>
                 <div>
                     <p className="eyebrow text-foreground/50">Document Upload</p>
-                    <p className="text-xs text-foreground/35 mt-0.5">Upload clear photos of all three documents.</p>
+                    <p className="text-xs text-foreground/35 mt-0.5">Upload clear photos or PDF scans of all three documents.</p>
                 </div>
             </div>
             {UPLOAD_FIELDS.map(field => {
@@ -41,7 +41,7 @@ export function StepDocuments({ uploadNames, readUpload, setStepError }) {
                         </span>
                         <input
                             type="file"
-                            accept="image/*"
+                            accept="image/*,application/pdf"
                             className="sr-only"
                             onChange={e => { readUpload(field.key, e.target.files?.[0]); setStepError(null); }}
                         />

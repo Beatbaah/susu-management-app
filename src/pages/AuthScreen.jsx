@@ -7,7 +7,6 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { validateLogin, validatePassword } from '../validation/authRules';
 import { signIn, resetPassword, getLockoutState } from '../services/authService';
-import { uploadRegistrationDoc } from '../services/storageService';
 import { cn } from '../components/ui/utils';
 import { FieldWrapper, inputCls } from './auth/authHelpers';
 import { StepProfile } from './auth/StepProfile';
@@ -96,11 +95,21 @@ export default function AuthScreen({ onLogin, onRegister, registrationGroups = [
 
     // ── Camera helpers
     const stopCamera = () => {
+        // Stop every track on the active stream — this is what releases the
+        // browser's camera indicator. Do it first before clearing refs.
         streamRef.current?.getTracks().forEach(t => t.stop());
         streamRef.current = null;
+        // Clear srcObject so the browser releases the camera indicator immediately.
+        if (videoRef.current) videoRef.current.srcObject = null;
         setCameraActive(false);
     };
     const startCamera = async () => {
+        // Stop existing tracks inline — do NOT call stopCamera() here because
+        // stopCamera sets cameraActive=false, which unmounts the <video> element,
+        // leaving videoRef.current null by the time getUserMedia resolves.
+        streamRef.current?.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+        if (videoRef.current) videoRef.current.srcObject = null;
         setCameraError('');
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
@@ -118,8 +127,11 @@ export default function AuthScreen({ onLogin, onRegister, registrationGroups = [
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         canvas.getContext('2d')?.drawImage(video, 0, 0);
-        setLiveSelfie(canvas.toDataURL('image/jpeg', 0.86));
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.86);
+        // Stop camera BEFORE setting state — avoids a re-render race where the
+        // video element unmounts before stopCamera can clear srcObject/tracks.
         stopCamera();
+        setLiveSelfie(dataUrl);
     };
     useEffect(() => stopCamera, []);
 
@@ -137,16 +149,13 @@ export default function AuthScreen({ onLogin, onRegister, registrationGroups = [
     }, [lockoutMs > 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── Document upload
-    const readUpload = async (key, file) => {
+    // Store the File object now; the actual upload to Firebase Storage happens at
+    // submission time in memberService so all files land under registration/{uid}/.
+    const readUpload = (key, file) => {
         if (!file) return;
-        const url = await uploadRegistrationDoc(`pending-${Date.now()}`, key, file);
-        if (!url) {
-            setStepError('Upload failed. Please check your connection and try again.');
-            return;
-        }
-        if (key === 'passportPic')   setPassportPic(url);
-        if (key === 'ghanaCardFront') setGhanaCardFront(url);
-        if (key === 'ghanaCardBack')  setGhanaCardBack(url);
+        if (key === 'passportPic')    setPassportPic(file);
+        if (key === 'ghanaCardFront') setGhanaCardFront(file);
+        if (key === 'ghanaCardBack')  setGhanaCardBack(file);
         setUploadNames(prev => ({ ...prev, [key]: file.name }));
     };
 
@@ -251,9 +260,14 @@ export default function AuthScreen({ onLogin, onRegister, registrationGroups = [
         const err = validateStep(step);
         if (err) { setStepError(err); return; }
         setStepError(null);
+        if (step === 2) stopCamera(); // ensure camera is off when leaving verification step
         setStep(s => s + 1);
     };
-    const handleBack = () => { setStepError(null); setStep(s => Math.max(0, s - 1)); };
+    const handleBack = () => {
+        setStepError(null);
+        if (step === 2) stopCamera(); // kill camera if user backs out of the verification step
+        setStep(s => Math.max(0, s - 1));
+    };
 
     // ── Registration submit
     const handleRegisterSubmit = async (e) => {
@@ -267,39 +281,45 @@ export default function AuthScreen({ onLogin, onRegister, registrationGroups = [
             return;
         }
         setLoading(true);
-        const result = await onRegister?.({
-            name: regName,
-            fullName: regName,
-            email: regEmail,
-            password: regPassword,
-            phone: regPhone.replace(/[\s\-()]/g, ''),
-            role: 'member',
-            status: 'pending',
-            groupId: preferredGroup,
-            ghanaCard,
-            address: regAddress,
-            bankMomo,
-            emergencyName,
-            emergencyPhone,
-            occupation,
-            passportPic,
-            ghanaCardFront,
-            ghanaCardBack,
-            liveSelfie,
-            acceptedTerms,
-            acceptedDataPolicy,
-            joinedAt: new Date().toISOString().split('T')[0],
-            color: '#6491DE',
-            streak: 0,
-            badges: [],
-            points: 0,
-        });
-        setLoading(false);
-        if (result?.ok === false) {
-            setStepError(result.message || 'Registration could not be submitted. Try again.');
-            return;
+        try {
+            const result = await onRegister?.({
+                name: regName,
+                fullName: regName,
+                email: regEmail,
+                password: regPassword,
+                phone: regPhone.replace(/[\s\-()]/g, ''),
+                role: 'member',
+                status: 'pending',
+                groupId: preferredGroup,
+                ghanaCard,
+                address: regAddress,
+                bankMomo,
+                emergencyName,
+                emergencyPhone,
+                occupation,
+                passportPic,
+                ghanaCardFront,
+                ghanaCardBack,
+                liveSelfie,
+                acceptedTerms,
+                acceptedDataPolicy,
+                joinedAt: new Date().toISOString().split('T')[0],
+                color: '#6491DE',
+                streak: 0,
+                badges: [],
+                points: 0,
+            });
+            if (result?.ok === false) {
+                setStepError(result.message || 'Registration could not be submitted. Try again.');
+                return;
+            }
+            stopCamera();
+            setMode('success');
+        } catch {
+            setStepError('An unexpected error occurred. Please check your connection and try again.');
+        } finally {
+            setLoading(false);
         }
-        setMode('success');
     };
 
     const switchToRegister = () => {
@@ -321,27 +341,91 @@ export default function AuthScreen({ onLogin, onRegister, registrationGroups = [
     // Success screen
     // ─────────────────────────────────────────────────────────────────────────
     if (mode === 'success') {
+        const selectedGroup = visibleGroups.find(g => String(g.id) === String(preferredGroup));
         return (
-            <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-6">
-                <div className="w-full max-w-md text-center animate-in zoom-in-95 duration-500">
-                    <div className="w-24 h-24 rounded-3xl bg-success/15 flex items-center justify-center mx-auto mb-6 border border-success/20">
-                        <CheckCircle2 className="w-12 h-12 text-success"/>
+            <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-6 overflow-y-auto">
+                {/* Background atmosphere */}
+                <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden>
+                    <div className="absolute -top-40 -right-20 w-[520px] h-[520px] rounded-full bg-success/[0.10] blur-[100px]"/>
+                    <div className="absolute -bottom-24 -left-16 w-[400px] h-[400px] rounded-full bg-primary/[0.08] blur-[90px]"/>
+                </div>
+
+                <div className="w-full max-w-md z-10 animate-in zoom-in-95 fade-in duration-500 py-10">
+                    {/* Logo */}
+                    <div className="flex justify-center mb-6">
+                        <div className="w-16 h-16 rounded-2xl border-2 border-white/20 shadow-lg overflow-hidden">
+                            <img src="/logo.jpg" alt="Excellent Susu" className="w-full h-full object-cover"/>
+                        </div>
                     </div>
-                    <h1 className="text-3xl font-bold text-foreground tracking-tight mb-3">Registration Submitted</h1>
-                    <p className="text-foreground/50 text-sm font-medium mb-2">
-                        Your application has been received and is awaiting admin review.
-                    </p>
-                    <p className="text-foreground/35 text-xs mb-10">
-                        You'll be notified once an administrator approves your account. This usually takes 1–2 business days.
-                    </p>
+
+                    {/* Success icon */}
+                    <div className="text-center mb-6">
+                        <div className="w-20 h-20 rounded-full bg-success/15 border-2 border-success/25 flex items-center justify-center mx-auto mb-5">
+                            <CheckCircle2 className="w-10 h-10 text-success"/>
+                        </div>
+                        <h1 className="text-2xl font-bold text-foreground tracking-tight mb-2">Application Submitted!</h1>
+                        <p className="text-foreground/55 text-sm leading-relaxed">
+                            Your registration has been received and is pending admin review.
+                        </p>
+                    </div>
+
+                    {/* Summary card */}
+                    <div className="bg-card border border-border/80 rounded-2xl p-5 mb-4 space-y-3">
+                        <p className="eyebrow text-muted-foreground">Submission summary</p>
+                        <div className="flex items-center justify-between text-sm">
+                            <span className="text-foreground/55">Name</span>
+                            <span className="font-semibold text-foreground">{regName}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                            <span className="text-foreground/55">Email</span>
+                            <span className="font-semibold text-foreground truncate max-w-[60%]">{regEmail}</span>
+                        </div>
+                        {selectedGroup && (
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="text-foreground/55">Preferred group</span>
+                                <span className="font-semibold text-foreground">{selectedGroup.groupName || selectedGroup.name}</span>
+                            </div>
+                        )}
+                        <div className="flex items-center justify-between text-sm">
+                            <span className="text-foreground/55">Status</span>
+                            <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 text-xs font-bold uppercase tracking-wide">
+                                Pending Review
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* What happens next */}
+                    <div className="bg-primary/8 border border-primary/20 rounded-2xl p-4 mb-6">
+                        <p className="text-xs font-semibold text-foreground mb-2.5">What happens next</p>
+                        <div className="space-y-2">
+                            {[
+                                'An administrator will review your documents and information.',
+                                'You\'ll receive an email once your account is approved.',
+                                'Approval typically takes 1–2 business days.',
+                                'Once approved, sign in with the email and password you set.',
+                            ].map((step, i) => (
+                                <div key={i} className="flex items-start gap-2.5">
+                                    <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                                        {i + 1}
+                                    </span>
+                                    <p className="text-xs text-foreground/55 leading-relaxed">{step}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
                     <button
                         type="button"
                         onClick={switchToLogin}
-                        className="w-full h-14 bg-primary text-primary-foreground font-bold rounded-2xl flex items-center justify-center gap-2 shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
+                        className="w-full h-14 bg-primary text-primary-foreground font-bold rounded-2xl flex items-center justify-center gap-2 shadow-xl shadow-primary/20 hover:scale-[1.01] active:scale-95 transition-all"
                     >
                         Back to Sign In
                         <ArrowRight className="w-5 h-5"/>
                     </button>
+
+                    <p className="text-center text-xs text-foreground/30 mt-5">
+                        Questions? Contact us at <span className="text-foreground/50">+233 55 365 4738</span>
+                    </p>
                 </div>
             </div>
         );

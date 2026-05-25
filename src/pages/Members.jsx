@@ -1,4 +1,4 @@
-import { Search, CheckCircle, XCircle, Filter, X, UserPlus, Users, AlertCircle, ChevronRight, Phone } from 'lucide-react';
+import { Search, CheckCircle, XCircle, Filter, X, UserPlus, Users, AlertCircle, ChevronRight, Phone, Upload, FileCheck } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { TablePagination } from '../components/ui/TablePagination';
 import { SkeletonList } from '../components/ui/LoadingState';
@@ -7,15 +7,33 @@ import { useAppContext } from '../context/AppContext';
 import { validateMemberRegistration } from '../validation/memberRules';
 import { toast } from '../utils/toast';
 import { cn } from '../components/ui/utils';
+
 const EMPTY_MEMBER_DRAFT = {
     fullName: '', email: '', phone: '', groupId: '', ghanaCard: '', address: '', bankMomo: ''
 };
+const EMPTY_DOCS = { passportPic: null, ghanaCardFront: null, ghanaCardBack: null };
+const EMPTY_DOC_NAMES = { passportPic: '', ghanaCardFront: '', ghanaCardBack: '' };
+
+const DOC_FIELDS = [
+    { key: 'passportPic',    label: 'Passport Photo' },
+    { key: 'ghanaCardFront', label: 'Ghana Card — Front' },
+    { key: 'ghanaCardBack',  label: 'Ghana Card — Back' },
+];
+
+// Generate a random temporary password for Firebase Auth.
+// The member resets it themselves via "Forgot password" on the login screen.
+function genTempPassword() {
+    return `Susu${Date.now().toString(36)}!${Math.random().toString(36).slice(2, 7)}`;
+}
+
 export function Members() {
     const { authUser, users, groups, payments, approveUser, rejectUser, registerMember, updateMember, appReady } = useAppContext();
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
     const [dialogOpen, setDialogOpen] = useState(false);
     const [draft, setDraft] = useState(EMPTY_MEMBER_DRAFT);
+    const [docFiles, setDocFiles] = useState(EMPTY_DOCS);
+    const [docNames, setDocNames] = useState(EMPTY_DOC_NAMES);
     const [dialogError, setDialogError] = useState(null);
     const [drawerMember, setDrawerMember] = useState(null);
     const [editingId, setEditingId] = useState(null);
@@ -25,9 +43,16 @@ export function Members() {
     const PAGE_SIZE = 25;
     const canAdd = authUser && ['admin', 'manager'].includes(authUser.role);
     const canEdit = canAdd;
+
+    const resetDocState = () => {
+        setDocFiles(EMPTY_DOCS);
+        setDocNames(EMPTY_DOC_NAMES);
+    };
+
     const openDialog = () => {
         setDialogError(null);
         setDraft({ ...EMPTY_MEMBER_DRAFT });
+        resetDocState();
         setEditingId(null);
         setDialogOpen(true);
     };
@@ -42,12 +67,25 @@ export function Members() {
             address: member.address || '',
             bankMomo: member.bankMomo || '',
         });
+        resetDocState();
         setEditingId(member.id);
         setDialogOpen(true);
         setDrawerMember(null);
     };
-    const closeDialog = () => { setDialogOpen(false); setDialogError(null); setEditingId(null); };
-    const handleSave = () => {
+    const closeDialog = () => {
+        setDialogOpen(false);
+        setDialogError(null);
+        setEditingId(null);
+        resetDocState();
+    };
+
+    const handleDocUpload = (key, file) => {
+        if (!file) return;
+        setDocFiles(prev => ({ ...prev, [key]: file }));
+        setDocNames(prev => ({ ...prev, [key]: file.name }));
+    };
+
+    const handleSave = async () => {
         if (submitting) return;
         const v = validateMemberRegistration(draft, users);
         if (!v.ok) {
@@ -55,6 +93,8 @@ export function Members() {
             return;
         }
         setSubmitting(true);
+        setDialogError(null);
+
         if (editingId != null) {
             updateMember(editingId, {
                 fullName: draft.fullName.trim(),
@@ -70,19 +110,39 @@ export function Members() {
             setSubmitting(false);
             return;
         }
-        registerMember({
-            fullName: draft.fullName.trim(),
-            email: draft.email.trim(),
-            phone: draft.phone.trim(),
-            groupId: draft.groupId || null,
-            ghanaCard: draft.ghanaCard.trim(),
-            address: draft.address.trim(),
-            bankMomo: draft.bankMomo.trim(),
-            status: 'pending',
-        });
-        toast.success(`Added ${draft.fullName.trim()} — awaiting approval`);
-        closeDialog();
-        setSubmitting(false);
+
+        try {
+            const result = await registerMember({
+                fullName: draft.fullName.trim(),
+                name: draft.fullName.trim(),
+                email: draft.email.trim(),
+                phone: draft.phone.trim(),
+                groupId: draft.groupId || null,
+                ghanaCard: draft.ghanaCard.trim(),
+                address: draft.address.trim(),
+                bankMomo: draft.bankMomo.trim(),
+                status: 'pending',
+                // Documents uploaded by the manager
+                passportPic:    docFiles.passportPic,
+                ghanaCardFront: docFiles.ghanaCardFront,
+                ghanaCardBack:  docFiles.ghanaCardBack,
+                // Auto-generated temp password — member resets via "Forgot password"
+                password: genTempPassword(),
+            });
+
+            if (result?.ok === false) {
+                setDialogError(result.message || 'Registration failed. Please check the details and try again.');
+                setSubmitting(false);
+                return;
+            }
+
+            toast.success(`${draft.fullName.trim()} registered — awaiting approval`);
+            closeDialog();
+        } catch (err) {
+            setDialogError('An unexpected error occurred. Please try again.');
+        } finally {
+            setSubmitting(false);
+        }
     };
     const membersWithDetails = useMemo(() => users
         .filter(member => member.role === 'member')
@@ -389,6 +449,46 @@ export function Members() {
                   <label className="text-xs font-medium text-foreground/70 mb-1.5 block">Physical Address</label>
                   <input type="text" placeholder="House No, Street, City" value={draft.address} onChange={(e) => setDraft(prev => ({ ...prev, address: e.target.value }))} className="w-full bg-card border-2 border-border rounded-xl px-4 py-3.5 text-sm text-foreground focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all"/>
                 </div>
+
+                {/* Document uploads — only shown when adding a new member */}
+                {editingId == null && (
+                  <div className="sm:col-span-2">
+                    <div className="flex items-center gap-2 mb-3">
+                      <FileCheck className="h-4 w-4 text-primary flex-shrink-0"/>
+                      <span className="text-xs font-medium text-foreground/70">Identity Documents <span className="text-foreground/40">(optional — can be added later)</span></span>
+                    </div>
+                    <div className="space-y-2">
+                      {DOC_FIELDS.map(field => {
+                        const uploaded = docNames[field.key];
+                        return (
+                          <label key={field.key} className={cn(
+                            'flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm transition-colors',
+                            uploaded
+                              ? 'border-success/30 bg-success/8 text-success'
+                              : 'border-border bg-muted/30 text-foreground/60 hover:bg-accent',
+                          )}>
+                            <span className="flex items-center gap-2 min-w-0">
+                              {uploaded
+                                ? <CheckCircle className="h-4 w-4 flex-shrink-0 text-success"/>
+                                : <Upload className="h-4 w-4 flex-shrink-0 text-primary"/>
+                              }
+                              <span className="truncate font-medium text-xs">{uploaded || field.label}</span>
+                            </span>
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-foreground/40 flex-shrink-0">
+                              {uploaded ? 'Done' : 'Upload'}
+                            </span>
+                            <input
+                              type="file"
+                              accept="image/*,application/pdf"
+                              className="sr-only"
+                              onChange={e => handleDocUpload(field.key, e.target.files?.[0])}
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {dialogError && (<div className="mt-4 flex items-center gap-2 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs font-bold">

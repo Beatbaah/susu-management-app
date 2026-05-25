@@ -39,15 +39,18 @@ async function compressImage(file, maxPx = 1400, quality = 0.82) {
  * In demo mode (no Firebase env vars) or when Firebase upload fails, falls
  * back to a data URL so the rest of the UI keeps working.
  */
-export async function uploadFile(path, file) {
+// storageInstance is optional — pass registrationStorage during member registration
+// so uploads use the new member's auth context rather than the main app's session.
+export async function uploadFile(path, file, storageInstance) {
     const compressed = await compressImage(file);
     const contentType = file.type.startsWith('image/')
         ? 'image/jpeg'
         : (file.type || 'application/octet-stream');
 
-    if (storage) {
+    const st = storageInstance || storage;
+    if (st) {
         try {
-            const fileRef = ref(storage, path);
+            const fileRef = ref(st, path);
             const snapshot = await uploadBytes(fileRef, compressed, {
                 contentType,
                 customMetadata: {
@@ -102,8 +105,8 @@ export async function uploadPaymentProof(paymentId, file) {
  * registration/ path do not require Firebase Auth so this always succeeds
  * when Firebase Storage is configured.
  */
-export async function uploadRegistrationDoc(userId, kind, file) {
-    return uploadFile(registrationDocPath(userId, kind, file), file);
+export async function uploadRegistrationDoc(userId, kind, file, storageInstance) {
+    return uploadFile(registrationDocPath(userId, kind, file), file, storageInstance);
 }
 
 // ─── Path builders ────────────────────────────────────────────────────────────

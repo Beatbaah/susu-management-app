@@ -1,10 +1,12 @@
-import { Phone, MapPin, CreditCard, Banknote, Trophy, Sparkles, Award, Wallet, Receipt as ReceiptIcon, CalendarClock, Trophy as TrophyIcon, Share2 } from 'lucide-react';
+import { Phone, MapPin, CreditCard, Banknote, Trophy, Sparkles, Award, Wallet, Receipt as ReceiptIcon, CalendarClock, Trophy as TrophyIcon, Share2, AlertTriangle, Bell, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { fmt } from '../utils/helpers';
 import { EmptyState } from '../components/ui/EmptyState';
 import { PayModal } from '../components/domain/PayModal';
 import { renderReceiptDocument } from '../services/receiptService';
+import { getPermissionState, requestPushPermission, isNotificationSupported } from '../services/pushNotificationService';
+import { isFirestoreReady } from '../services/firestoreSync';
 export function MemberPortal() {
     const { authUser, users, payments, groups, schedule } = useAppContext();
     const me = users.find(u => u.id === authUser?.id) || authUser;
@@ -34,6 +36,10 @@ export function MemberPortal() {
         };
     }, [schedule, me?.id, myGroup]);
     const [payOpen, setPayOpen] = useState(false);
+    const [pushDismissed, setPushDismissed] = useState(false);
+    const [permState, setPermState] = useState(() => getPermissionState());
+    const showPushNudge = isFirestoreReady() && isNotificationSupported() && permState === 'default' && !pushDismissed;
+    const showDocsBanner = me?.status === 'approved' && (!me?.passportPic || !me?.ghanaCardFront || !me?.ghanaCardBack);
     return (<div className="pb-[calc(7rem+env(safe-area-inset-bottom,0px))] page-enter">
       <div className="px-4 sm:px-6 pt-4 sm:pt-6 pb-2">
         <div className="flex items-start justify-between mb-4 sm:mb-6">
@@ -46,6 +52,47 @@ export function MemberPortal() {
           </span>
         </div>
       </div>
+
+      {/* Push notification nudge */}
+      {showPushNudge && (
+        <div className="px-4 sm:px-6 mb-4">
+          <div className="bg-primary/10 border border-primary/30 rounded-2xl p-4 flex items-start gap-3">
+            <Bell className="w-5 h-5 text-primary flex-shrink-0 mt-0.5"/>
+            <div className="flex-1 min-w-0">
+              <p className="text-foreground font-bold text-sm">Stay updated</p>
+              <p className="text-muted-foreground text-xs mt-0.5">Enable notifications to get payment reminders and account updates.</p>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button type="button"
+                onClick={async () => {
+                  const result = await requestPushPermission(authUser?.id);
+                  setPermState(getPermissionState());
+                  if (!result.ok) setPushDismissed(true);
+                }}
+                className="px-3 py-1.5 bg-primary text-primary-foreground rounded-xl text-xs font-bold">
+                Enable
+              </button>
+              <button type="button" onClick={() => setPushDismissed(true)}
+                className="w-7 h-7 rounded-xl bg-muted/50 flex items-center justify-center text-muted-foreground">
+                <X className="w-3.5 h-3.5"/>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Missing documents banner */}
+      {showDocsBanner && (
+        <div className="px-4 sm:px-6 mb-4">
+          <div className="bg-warning/10 border border-warning/30 rounded-2xl p-4 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5"/>
+            <div className="flex-1 min-w-0">
+              <p className="text-warning font-bold text-sm">Documents missing</p>
+              <p className="text-muted-foreground text-xs mt-0.5">Your ID documents are incomplete. Tap your profile icon at the top to upload them.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Pay Now — primary CTA, visible above fold */}
       {myGroup && me?.status === 'approved' && (

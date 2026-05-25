@@ -16,14 +16,23 @@ export function replacePayments(next) {
     writeStore(STORE_KEY, next);
     void replaceCollection(STORE_KEY, next);
 }
-export function recordPayment(draft, actorRole) {
-    const group = findGroup(draft.groupId);
-    const validation = validatePaymentRecord({
-        payment: draft,
-        group,
-        payments: listPayments(),
-        actorRole,
-    });
+
+// Helper: get payment list for demo mode; never call replacePayments in Firestore mode
+// (listPayments() returns MOCK data in Firestore mode because clearNamespace() wipes localStorage).
+function getLocalPayments() {
+    const all = listPayments();
+    // MOCK_PAYMENTS have sequential ids like 'pay1'. Real ids are UUIDs.
+    // If the list is the mock default, treat it as empty for write operations.
+    return all === MOCK_PAYMENTS ? [] : all;
+}
+
+// Accept currentData so callers (AppContext) can pass the Firestore-subscribed
+// payment object when the local store is empty.
+export function recordPayment(draft, actorRole, currentPayments = null, currentGroup = null) {
+    const all = getLocalPayments();
+    const paymentsList = all.length > 0 ? all : (currentPayments || []);
+    const group = findGroup(draft.groupId) || currentGroup;
+    const validation = validatePaymentRecord({ payment: draft, group, payments: paymentsList, actorRole });
     if (!validation.ok)
         return { ok: false, message: validation.message };
     const today = new Date().toISOString().split('T')[0];
@@ -39,19 +48,23 @@ export function recordPayment(draft, actorRole) {
         userId: draft.userId ?? draft.memberId,
         ...draft,
     };
-    replacePayments([payment, ...listPayments()]);
+    if (all.length > 0) {
+        replacePayments([payment, ...all]);
+    }
     void upsertDoc(STORE_KEY, payment);
     return { ok: true, payment };
 }
-export function confirmPayment(paymentId, confirmedBy, actorRole) {
+export function confirmPayment(paymentId, confirmedBy, actorRole, currentData = null, currentUsers = null) {
     if (actorRole && !['admin', 'manager'].includes(actorRole))
         return null;
-    const current = findPayment(paymentId);
+    const all = getLocalPayments();
+    const current = all.length > 0 ? all.find(p => p.id === paymentId) : currentData;
     if (!current || current.status === 'paid')
         return current ?? null;
-    // Do not confirm payments for suspended or rejected members.
     const payerId = current.userId || current.memberId;
-    const payer = payerId ? listUsers().find(u => String(u.id) === String(payerId)) : null;
+    // Prefer live users list (passed from AppContext in Firestore mode) over localStorage.
+    const usersList = currentUsers?.length > 0 ? currentUsers : listUsers();
+    const payer = payerId ? usersList.find(u => String(u.id) === String(payerId)) : null;
     if (payer && payer.status !== 'approved')
         return null;
     const next = {
@@ -60,14 +73,15 @@ export function confirmPayment(paymentId, confirmedBy, actorRole) {
         confirmedBy,
         paymentDate: current.paymentDate || new Date().toISOString().split('T')[0],
     };
-    replacePayments(listPayments().map(p => (p.id === paymentId ? next : p)));
+    if (all.length > 0) replacePayments(all.map(p => (p.id === paymentId ? next : p)));
     void upsertDoc(STORE_KEY, next);
     return next;
 }
-export function rejectPayment(paymentId, rejectedBy, actorRole) {
+export function rejectPayment(paymentId, rejectedBy, actorRole, currentData = null) {
     if (actorRole && !['admin', 'manager'].includes(actorRole))
         return null;
-    const current = findPayment(paymentId);
+    const all = getLocalPayments();
+    const current = all.length > 0 ? all.find(p => p.id === paymentId) : currentData;
     if (!current || current.status === 'rejected')
         return current ?? null;
     const next = {
@@ -76,29 +90,25 @@ export function rejectPayment(paymentId, rejectedBy, actorRole) {
         rejectedBy,
         rejectedAt: new Date().toISOString(),
     };
-    replacePayments(listPayments().map(p => (p.id === paymentId ? next : p)));
+    if (all.length > 0) replacePayments(all.map(p => (p.id === paymentId ? next : p)));
     void upsertDoc(STORE_KEY, next);
     return next;
 }
-/**
- * Patch a payment. Locked once status === 'paid' so confirmed payments are
- * never silently re-written (per the financial-rule architecture). Returns
- * the updated record or a rejection.
- */
-export function reopenPayment(paymentId, reopenedBy) {
-    const current = findPayment(paymentId);
+export function reopenPayment(paymentId, reopenedBy, currentData = null) {
+    const all = getLocalPayments();
+    const current = all.length > 0 ? all.find(p => p.id === paymentId) : currentData;
     if (!current || current.status !== 'rejected')
         return null;
     const { rejectedBy: _rb, rejectedAt: _ra, ...rest } = current;
     const next = { ...rest, status: 'pending', reopenedBy, reopenedAt: new Date().toISOString() };
-    replacePayments(listPayments().map(p => (p.id === paymentId ? next : p)));
+    if (all.length > 0) replacePayments(all.map(p => (p.id === paymentId ? next : p)));
     void upsertDoc(STORE_KEY, next);
     return next;
 }
 export function markOverduePayments() {
-    const now = new Date();
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const all = listPayments();
+    const all = getLocalPayments();
+    if (all.length === 0) return { changed: false, payments: [] };
+    const today = new Date().toISOString().split('T')[0];
     let changed = false;
     const updated = all.map(p => {
         if (p.status === 'pending' && p.dueDate && p.dueDate < today) {
@@ -110,25 +120,25 @@ export function markOverduePayments() {
     if (changed) replacePayments(updated);
     return { changed, payments: updated };
 }
-export function updatePayment(paymentId, patch, actorRole) {
-    const current = findPayment(paymentId);
+export function updatePayment(paymentId, patch, actorRole, currentData = null) {
+    const all = getLocalPayments();
+    const current = all.length > 0 ? all.find(p => p.id === paymentId) : currentData;
     if (!current)
         return { ok: false, message: 'Payment not found.' };
-    if (current.status === 'paid') {
+    if (current.status === 'paid')
         return { ok: false, message: 'Confirmed payments cannot be edited.' };
-    }
     const merged = { ...current, ...patch };
     const group = findGroup(merged.groupId);
     const validation = validatePaymentRecord({
         payment: merged,
         group,
-        payments: listPayments().filter(p => p.id !== paymentId), // exclude self from duplicate-check
+        payments: all.length > 0 ? all.filter(p => p.id !== paymentId) : [],
         actorRole,
     });
     if (!validation.ok)
         return { ok: false, message: validation.message };
     const next = { ...merged, updatedAt: new Date().toISOString() };
-    replacePayments(listPayments().map(p => (p.id === paymentId ? next : p)));
+    if (all.length > 0) replacePayments(all.map(p => (p.id === paymentId ? next : p)));
     void upsertDoc(STORE_KEY, next);
     return { ok: true, payment: next };
 }

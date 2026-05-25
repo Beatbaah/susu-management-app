@@ -45,35 +45,37 @@ export function StepVerification({
                     </div>
                 </div>
 
-                {liveSelfie ? (
+                {/* Video element is ALWAYS in the DOM so videoRef stays valid across
+                    the liveSelfie → Retake cycle. CSS hides it when not needed. */}
+                <div className={`space-y-3${liveSelfie ? ' hidden' : ''}`}>
+                    <div className="relative h-44 overflow-hidden rounded-2xl border border-border bg-black/30">
+                        <video ref={videoRef} autoPlay playsInline muted className={`h-full w-full object-cover${cameraActive ? '' : ' hidden'}`}/>
+                        {!cameraActive && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-foreground/25">
+                                <Camera className="h-10 w-10"/>
+                                <span className="text-xs">Camera preview</span>
+                            </div>
+                        )}
+                    </div>
+                    {cameraError && (
+                        <p className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">{cameraError}</p>
+                    )}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        <Button type="button" variant="outline" className="rounded-2xl border-border bg-card text-foreground hover:bg-accent" onClick={startCamera}>
+                            <Camera className="h-4 w-4 mr-2"/>Start Camera
+                        </Button>
+                        <Button type="button" className="rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90" disabled={!cameraActive} onClick={() => { captureSelfie(); setStepError(null); }}>
+                            <CheckCircle className="h-4 w-4 mr-2"/>Capture
+                        </Button>
+                    </div>
+                </div>
+
+                {liveSelfie && (
                     <div className="space-y-3">
                         <img src={liveSelfie} alt="Live selfie" className="h-48 w-full rounded-2xl border border-success/20 object-cover"/>
                         <Button type="button" variant="outline" className="w-full rounded-2xl border-border bg-card text-foreground hover:bg-accent" onClick={() => { setLiveSelfie(null); startCamera(); }}>
                             <RotateCcw className="h-4 w-4 mr-2"/>Retake
                         </Button>
-                    </div>
-                ) : (
-                    <div className="space-y-3">
-                        <div className="relative h-44 overflow-hidden rounded-2xl border border-border bg-black/30">
-                            {cameraActive
-                                ? <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover"/>
-                                : <div className="flex h-full flex-col items-center justify-center gap-2 text-foreground/25">
-                                      <Camera className="h-10 w-10"/>
-                                      <span className="text-xs">Camera preview</span>
-                                  </div>
-                            }
-                        </div>
-                        {cameraError && (
-                            <p className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">{cameraError}</p>
-                        )}
-                        <div className="grid gap-3 sm:grid-cols-2">
-                            <Button type="button" variant="outline" className="rounded-2xl border-border bg-card text-foreground hover:bg-accent" onClick={startCamera}>
-                                <Camera className="h-4 w-4 mr-2"/>Start Camera
-                            </Button>
-                            <Button type="button" className="rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90" disabled={!cameraActive} onClick={() => { captureSelfie(); setStepError(null); }}>
-                                <CheckCircle className="h-4 w-4 mr-2"/>Capture
-                            </Button>
-                        </div>
                     </div>
                 )}
             </div>

@@ -22,7 +22,7 @@ const CURRENCIES = [
     { code: 'XOF (CFA)', label: 'CFA Franc', symbol: 'CFA' },
 ];
 export function Settings() {
-    const { authUser, settings, updateSetting, payments, users, groups, schedule, auditLogs, setUsers, setPayments, setGroups, setSchedule, } = useAppContext();
+    const { authUser, settings, updateSetting, payments, users, groups, schedule, auditLogs, setUsers, setPayments, setGroups, setSchedule, clearAuditLogs } = useAppContext();
     const isAdminOrManager = authUser && ['admin', 'manager'].includes(authUser.role);
     const [dialog, setDialog] = useState(null);
     const [pushPermission, setPushPermission] = useState(() => getPermissionState());
@@ -182,6 +182,11 @@ export function Settings() {
             toast.error('Could not export settings');
         }
     };
+    const handleClearAuditLogs = () => {
+        clearAuditLogs();
+        setDialog(null);
+        toast.success('Audit logs cleared');
+    };
     const clearCache = async () => {
         try {
             if ('caches' in window) {
@@ -262,6 +267,7 @@ export function Settings() {
                 { icon: Upload, label: 'Import Data', action: () => setDialog('import') },
                 { icon: Database, label: 'Export Settings', action: exportSettings },
                 { icon: Trash2, label: 'Clear Cache', action: clearCache, danger: true },
+                { icon: Trash2, label: 'Clear Audit Logs', action: () => setDialog('clear-audit'), danger: true },
             ]
         }] : [{ title: 'Data Management', items: [{ icon: Trash2, label: 'Clear Cache', action: clearCache, danger: true }] }]),
     ];
@@ -436,6 +442,21 @@ export function Settings() {
           </div>
         </SettingsDialog>)}
 
+      {dialog === 'clear-audit' && (<SettingsDialog title="Clear Audit Logs" onClose={() => setDialog(null)}>
+          <div className="space-y-4 text-sm">
+            <p className="text-muted-foreground">
+              This will permanently delete all <strong className="text-foreground">{auditLogs.length}</strong> audit log {auditLogs.length === 1 ? 'entry' : 'entries'} from both this device and Firestore. This action cannot be undone.
+            </p>
+            <div className="flex gap-2 pt-1">
+              <button type="button" onClick={() => setDialog(null)} className="flex-1 bg-card border border-border py-3 rounded-xl text-foreground">
+                Cancel
+              </button>
+              <button type="button" onClick={handleClearAuditLogs} className="flex-1 bg-destructive text-white py-3 rounded-xl font-semibold">
+                Clear All Logs
+              </button>
+            </div>
+          </div>
+        </SettingsDialog>)}
       {dialog === 'import' && (<SettingsDialog title="Import Data" onClose={() => { setDialog(null); setImportError(null); }}>
           <div className="space-y-3 text-sm">
             <p className="text-muted-foreground">

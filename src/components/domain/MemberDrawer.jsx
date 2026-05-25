@@ -1,4 +1,4 @@
-import { X, CheckCircle, XCircle, Users, Phone, MapPin, CreditCard, Banknote, Calendar, FileCheck, FileX, Award, Sparkles, Trophy, Mail, Shield, Pencil, Save, Camera, ImagePlus, } from 'lucide-react';
+import { X, CheckCircle, XCircle, Users, Phone, MapPin, CreditCard, Banknote, Calendar, FileCheck, FileX, Award, Sparkles, Trophy, Mail, Shield, Pencil, Save, Camera, ImagePlus, Eye, Download, FileText, ZoomIn, } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { fmt } from '../../utils/helpers';
@@ -23,6 +23,7 @@ export function MemberDrawer({ user, onClose, onEdit }) {
     // Always read the live user from context so the drawer reflects updates immediately
     const liveUser = users.find(u => u.id === user.id) || user;
     const [assignOpen, setAssignOpen] = useState(false);
+    const [viewingDoc, setViewingDoc] = useState(null); // { label, url }
     const [editMode, setEditMode] = useState(false);
     const [editDraft, setEditDraft] = useState({
         fullName: liveUser.fullName || liveUser.name || '',
@@ -34,8 +35,10 @@ export function MemberDrawer({ user, onClose, onEdit }) {
     const [editError, setEditError] = useState(null);
     const [uploadingProfile, setUploadingProfile] = useState(false);
     const [uploadingCover, setUploadingCover] = useState(false);
+    const [uploadingDocKey, setUploadingDocKey] = useState(null);
     const profileInputRef = useRef(null);
     const coverInputRef = useRef(null);
+    const docInputRefs = useRef({});
 
     const displayProfilePic = liveUser.profilePic || liveUser.liveSelfie || null;
     const displayCoverPic = liveUser.coverPic || null;
@@ -109,11 +112,30 @@ export function MemberDrawer({ user, onClose, onEdit }) {
         setEditError(null);
     };
     const docs = [
-        ['Ghana Card · Front', liveUser.ghanaCardFront],
-        ['Ghana Card · Back', liveUser.ghanaCardBack],
-        ['Passport photo', liveUser.passportPic],
-        ['Live selfie', liveUser.liveSelfie],
+        ['Ghana Card · Front', liveUser.ghanaCardFront, 'ghanaCardFront'],
+        ['Ghana Card · Back',  liveUser.ghanaCardBack,  'ghanaCardBack'],
+        ['Passport photo',     liveUser.passportPic,    'passportPic'],
+        ['Live selfie',        liveUser.liveSelfie,     'liveSelfie'],
     ];
+
+    const handleDocUpload = async (fieldKey, file) => {
+        if (!file || !canEdit) return;
+        setUploadingDocKey(fieldKey);
+        try {
+            const url = await uploadFile(`registration/${liveUser.id}/${fieldKey}.jpg`, file);
+            if (url) {
+                updateMember(liveUser.id, { [fieldKey]: url }, liveUser);
+                toast.success('Document uploaded');
+            } else {
+                toast.error('Upload failed. Try again.');
+            }
+        } catch {
+            toast.error('Could not upload document.');
+        } finally {
+            setUploadingDocKey(null);
+            if (docInputRefs.current[fieldKey]) docInputRefs.current[fieldKey].value = '';
+        }
+    };
     const uploadedDocs = docs.filter(([, v]) => Boolean(v)).length;
     const totalContributed = myPayments
         .filter(p => p.status === 'paid')
@@ -299,17 +321,85 @@ export function MemberDrawer({ user, onClose, onEdit }) {
               </Section>
 
               <Section title="Documents" meta={`${uploadedDocs}/${docs.length} uploaded`} metaTone={uploadedDocs === docs.length ? 'text-success' : 'text-muted-foreground'}>
-                {docs.map(([label, val], i) => (<div key={label} className={`flex items-center justify-between px-4 py-3 ${i < docs.length - 1 ? 'border-b border-border' : ''}`}>
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${val ? 'bg-success/15 text-success' : 'bg-muted/40 text-muted-foreground'}`}>
-                        {val ? <FileCheck className="w-4 h-4"/> : <FileX className="w-4 h-4"/>}
+                {/* Hidden file inputs for document upload in edit mode */}
+                {docs.map(([, , fieldKey]) => (
+                  <input
+                    key={fieldKey}
+                    ref={el => { docInputRefs.current[fieldKey] = el; }}
+                    type="file"
+                    accept="image/*,application/pdf"
+                    className="hidden"
+                    onChange={e => handleDocUpload(fieldKey, e.target.files?.[0])}
+                  />
+                ))}
+                {docs.map(([label, val, fieldKey], i) => {
+                  const isPdf = val && (val.startsWith('data:application/pdf') || val.split('?')[0].toLowerCase().endsWith('.pdf'));
+                  const isUploading = uploadingDocKey === fieldKey;
+                  return (
+                    <div key={label} className={`flex items-center gap-3 px-4 py-3 ${i < docs.length - 1 ? 'border-b border-border' : ''}`}>
+                      {/* Thumbnail / icon */}
+                      <div className={`w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden border ${val ? 'border-success/20 bg-success/8' : 'border-border bg-muted/30'}`}>
+                        {val && !isPdf
+                          ? <img src={val} alt={label} className="w-full h-full object-cover cursor-pointer" onClick={() => setViewingDoc({ label, url: val, isPdf: false })}/>
+                          : val && isPdf
+                          ? <FileText className="w-5 h-5 text-primary"/>
+                          : <FileX className="w-5 h-5 text-muted-foreground"/>
+                        }
                       </div>
-                      <span className="text-foreground text-sm">{label}</span>
+
+                      {/* Label */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-foreground font-medium truncate">{label}</p>
+                        <p className={`text-xs font-semibold uppercase tracking-wide ${val ? 'text-success' : 'text-muted-foreground'}`}>
+                          {isUploading ? 'Uploading…' : val ? (isPdf ? 'PDF' : 'Image') : 'Missing'}
+                        </p>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {/* Upload button — visible in edit mode */}
+                        {editMode && canEdit && (
+                          <button
+                            type="button"
+                            title={val ? 'Replace document' : 'Upload document'}
+                            disabled={isUploading}
+                            onClick={() => docInputRefs.current[fieldKey]?.click()}
+                            className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center hover:bg-primary/20 transition-colors disabled:opacity-50"
+                          >
+                            {isUploading
+                              ? <div className="w-3.5 h-3.5 border-2 border-primary/40 border-t-primary rounded-full animate-spin"/>
+                              : <ImagePlus className="w-3.5 h-3.5"/>
+                            }
+                          </button>
+                        )}
+                        {/* View / download — visible when document exists and not in edit mode */}
+                        {val && !editMode && (
+                          <>
+                            <button
+                              type="button"
+                              title={isPdf ? 'Open PDF' : 'View image'}
+                              onClick={() => isPdf ? window.open(val, '_blank', 'noopener,noreferrer') : setViewingDoc({ label, url: val, isPdf: false })}
+                              className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center hover:bg-primary/20 transition-colors"
+                            >
+                              <Eye className="w-3.5 h-3.5"/>
+                            </button>
+                            <a
+                              href={val}
+                              download={label.replace(/\s·\s/g, '_').replace(/\s/g, '_').toLowerCase() + (isPdf ? '.pdf' : '.jpg')}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Download"
+                              className="w-8 h-8 rounded-lg bg-muted/50 text-muted-foreground flex items-center justify-center hover:bg-muted hover:text-foreground transition-colors"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <Download className="w-3.5 h-3.5"/>
+                            </a>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    <span className={`text-xs font-bold uppercase tracking-wider ${val ? 'text-success' : 'text-muted-foreground'}`}>
-                      {val ? 'Uploaded' : 'Missing'}
-                    </span>
-                  </div>))}
+                  );
+                })}
               </Section>
 
               {myGroup && (<Section title="Susu group">
@@ -370,6 +460,48 @@ export function MemberDrawer({ user, onClose, onEdit }) {
       </div>
 
       {assignOpen && (<AssignGroupModal memberId={liveUser.id} onClose={() => setAssignOpen(false)} onAssigned={() => { setAssignOpen(false); onClose(); }}/>)}
+
+      {/* Document lightbox */}
+      {viewingDoc && (
+        <div
+          className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm p-4"
+          onClick={() => setViewingDoc(null)}
+        >
+          {/* Header bar */}
+          <div className="absolute top-0 inset-x-0 flex items-center justify-between px-4 py-3 bg-black/50" onClick={e => e.stopPropagation()}>
+            <p className="text-white text-sm font-semibold truncate">{viewingDoc.label}</p>
+            <div className="flex items-center gap-2">
+              <a
+                href={viewingDoc.url}
+                download={viewingDoc.label.replace(/\s·\s/g, '_').replace(/\s/g, '_').toLowerCase() + '.jpg'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition-colors"
+                onClick={e => e.stopPropagation()}
+              >
+                <Download className="w-3.5 h-3.5"/>
+                Download
+              </a>
+              <button
+                type="button"
+                onClick={() => setViewingDoc(null)}
+                className="w-8 h-8 rounded-lg bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition-colors"
+              >
+                <X className="w-4 h-4"/>
+              </button>
+            </div>
+          </div>
+
+          {/* Image */}
+          <img
+            src={viewingDoc.url}
+            alt={viewingDoc.label}
+            className="max-w-full max-h-[80vh] rounded-xl object-contain shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          />
+          <p className="text-white/40 text-xs mt-3">Tap outside to close</p>
+        </div>
+      )}
     </>);
 }
 // ─── helpers ──────────────────────────────────────────────────────────────

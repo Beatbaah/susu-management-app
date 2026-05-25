@@ -1,7 +1,6 @@
 import { genId } from '../utils/helpers';
 import { findGroup, updateGroup } from './groupService';
-import { db } from '../utils/firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { isFirestoreReady } from './firestoreSync';
 
 const MAX_MESSAGE_LENGTH = 1000;
 
@@ -20,13 +19,14 @@ export function listMessages(groupId) {
     return Array.isArray(group?.chat) ? group.chat : [];
 }
 export function postMessage(groupId, actor, message, type = 'message') {
+    // In Firestore mode these paths are handled entirely by AppContext.
+    if (isFirestoreReady()) return null;
     const text = sanitize((message || '').trim());
     if (!text)
         return null;
     const group = findGroup(groupId);
     if (!group)
         return null;
-    // Members can only post in groups they belong to.
     if (actor?.role === 'member') {
         const members = Array.isArray(group.members) ? group.members : [];
         if (!members.map(String).includes(String(actor?.id))) return null;
@@ -42,21 +42,14 @@ export function postMessage(groupId, actor, message, type = 'message') {
     };
     const next = [...(Array.isArray(group.chat) ? group.chat : []), entry];
     updateGroup(groupId, { chat: next });
-    if (db) {
-        try {
-            // Architecture: messages/{groupId}/items/{messageId}
-            void setDoc(doc(db, 'messages', String(groupId), 'items', entry.id), entry, { merge: true });
-        }
-        catch (error) {
-            console.warn('[chatService] Firestore write failed', error);
-        }
-    }
     return entry;
 }
 export function postAnnouncement(groupId, actor, message) {
     return postMessage(groupId, actor, message, 'announcement');
 }
 export function addReaction(groupId, messageId, emoji, userId) {
+    // In Firestore mode these paths are handled entirely by AppContext.
+    if (isFirestoreReady()) return null;
     const group = findGroup(groupId);
     if (!group) return null;
     const chat = Array.isArray(group.chat) ? group.chat : [];
@@ -65,7 +58,7 @@ export function addReaction(groupId, messageId, emoji, userId) {
         const reactions = { ...(m.reactions || {}) };
         const users = reactions[emoji] ? [...reactions[emoji]] : [];
         const idx = users.indexOf(userId);
-        if (idx >= 0) users.splice(idx, 1); else users.push(userId); // toggle
+        if (idx >= 0) users.splice(idx, 1); else users.push(userId);
         if (users.length === 0) delete reactions[emoji]; else reactions[emoji] = users;
         return { ...m, reactions };
     });

@@ -141,8 +141,8 @@ export function NotificationsPanel({ onClose, onNavigate }) {
     const unreadCount = items.filter(i => !i.read).length;
     const hasReminderUnread = reminders.some(r => !r.read);
     const hasReminders = reminders.length > 0;
-    return (<div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-start sm:justify-end p-0 sm:p-4" onClick={onClose}>
-      <div className="bg-card border border-border w-full sm:max-w-sm sm:rounded-3xl rounded-t-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+    return (<div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-end" onClick={onClose}>
+      <div className="bg-card border-l border-border w-full max-w-sm h-full flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-right duration-300" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b border-border flex-shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-2xl bg-primary/15 text-primary flex items-center justify-center">
@@ -206,7 +206,7 @@ export function NotificationsPanel({ onClose, onNavigate }) {
             </div>)}
         </div>
 
-        {(hasReminderUnread || items.length > 0) && (<div className="border-t border-border p-3 flex-shrink-0">
+        {(hasReminderUnread || items.length > 0) && (<div className="border-t border-border p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] flex-shrink-0">
             <div className="grid gap-2">
               {hasReminderUnread && (<button type="button" onClick={() => { markAllRemindersRead(); toast.success('All reminders marked read'); }} className="w-full text-center text-primary text-xs font-bold py-2 rounded-xl hover:bg-primary/10 transition-colors">
                   Mark all reminders as read

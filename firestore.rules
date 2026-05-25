@@ -6,8 +6,11 @@ rules_version = '2';
 //   - Users authenticate with Firebase Email/Password Auth.
 //   - Each user's Firestore document lives at users/{auth.uid} so
 //     request.auth.uid == userId is the ownership test.
-//   - Role is stored in the user document (role: 'admin'|'manager'|'collector'|'member').
-//     For stronger guarantees, migrate to custom claims set by a Cloud Function.
+//   - Role is checked from Firebase Auth Custom Claims (request.auth.token.role)
+//     set by the syncUserRole Cloud Function, with a Firestore doc fallback for
+//     users who haven't had their claims synced yet (e.g. pending members).
+//   - Audit logs are written by the writeAuditLog Cloud Function using the Admin
+//     SDK — client writes are denied so logs cannot be forged or deleted.
 //   - Anonymous auth is NOT permitted to write any data.
 
 service cloud.firestore {
@@ -28,14 +31,22 @@ service cloud.firestore {
       return signedIn() && !isAnonymous();
     }
 
-    // Look up the caller's own user document to read their role.
-    // Requires users to be keyed by Firebase Auth UID.
+    // Role resolution: prefer Custom Claims (fast, no extra read) and fall back
+    // to the Firestore user doc for accounts that pre-date the syncUserRole function.
+    function claimRole() {
+      return request.auth.token.get('role', '');
+    }
+
     function callerDoc() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    function callerRole() {
+    function docRole() {
       return callerDoc().data.role;
+    }
+
+    function callerRole() {
+      return claimRole() != '' ? claimRole() : docRole();
     }
 
     function isAdmin() {
@@ -73,7 +84,15 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if ownsDoc(userId) || isStaff();
-      allow create: if isManager() || ownsDoc(userId);
+      // Self-registration path: allow any write that creates a pending member.
+      // The role and status constraints prevent privilege escalation — only
+      // staff can later approve/change status. ownsDoc covers the case where
+      // the new session is already active; the role/status fallback handles the
+      // race where the Firestore SDK hasn't picked up the new auth token yet.
+      allow create: if ownsDoc(userId)
+        || (request.resource.data.role == 'member'
+            && request.resource.data.status == 'pending')
+        || isManager();
       allow update: if (ownsDoc(userId) && noRoleEscalation()) || (isManager() && noRoleEscalation());
       allow delete: if false;
     }
@@ -81,10 +100,11 @@ service cloud.firestore {
     // ── /groups ──────────────────────────────────────────────────────────
 
     match /groups/{groupId} {
-      allow read: if isStaff()
-        || (isMember() && request.auth.uid in resource.data.members);
+      // Unauthenticated read allowed so the registration form dropdown
+      // can list available groups without a Firebase session.
+      allow read: if true;
       allow create, update: if isManager();
-      allow delete: if false;
+      allow delete: if isManager();
     }
 
     // ── /payments ────────────────────────────────────────────────────────
@@ -92,7 +112,12 @@ service cloud.firestore {
     match /payments/{paymentId} {
       allow read: if isStaff()
         || (isMember() && resource.data.userId == request.auth.uid);
-      allow create: if isStaff();
+      // Members can submit their own pending payments (e.g. via PayModal).
+      // Staff must confirm before status advances beyond 'pending'.
+      allow create: if isStaff()
+        || (isMember() && notSuspended()
+            && request.resource.data.userId == request.auth.uid
+            && request.resource.data.status == 'pending');
       allow update: if isManager() && resource.data.status != 'paid';
       allow delete: if false;
     }
@@ -137,10 +162,10 @@ service cloud.firestore {
 
     match /auditLogs/{logId} {
       allow read: if isAdmin();
-      // Only staff may write audit entries from the client; members cannot forge logs.
-      // Migrate to Cloud Functions + Admin SDK for tamper-proof logs.
-      allow create: if isStaff();
-      allow update, delete: if false;
+      // All client writes are denied. Entries are written exclusively by the
+      // writeAuditLog Cloud Function using the Firebase Admin SDK, which bypasses
+      // these rules — so logs cannot be forged, altered, or deleted by any client.
+      allow write: if false;
     }
 
     // ── /receipts ─────────────────────────────────────────────────────────
